@@ -79,7 +79,7 @@ use Illuminate\Support\Facades\Artisan;
 use Illuminate\Support\Facades\Route;
 
 
-Route::get('/opration', function () {
+Route::get('/clear', function () {
     Artisan::call('storage:link');
     Artisan::call('cache:clear');
     Artisan::call('optimize:clear');

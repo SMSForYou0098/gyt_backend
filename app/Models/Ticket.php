@@ -8,7 +8,7 @@ use Illuminate\Database\Eloquent\SoftDeletes;
 
 class Ticket extends Model
 {
-    use HasFactory,SoftDeletes;
+    use HasFactory, SoftDeletes;
 
     protected $casts = [
         'access_area' => 'array',
@@ -36,7 +36,7 @@ class Ticket extends Model
         'access_area',
         'modify_as',
         'user_booking_limit',
-      'allow_pos',
+        'allow_pos',
         'allow_agent',
     ];
 
@@ -46,7 +46,7 @@ class Ticket extends Model
     }
     public function eventData()
     {
-        return $this->belongsTo(Event::class, 'event_id','id');
+        return $this->belongsTo(Event::class, 'event_id', 'id');
     }
     public function bookings()
     {
@@ -55,6 +55,14 @@ class Ticket extends Model
     public function agentBooking()
     {
         return $this->hasMany(Agent::class);
+    }
+    public function posBookings()
+    {
+        return $this->hasMany(PosBooking::class);
+    }
+    public function sponsorBookings()
+    {
+        return $this->hasMany(SponsorBooking::class);
     }
     public function agentAmusementBooking()
     {
@@ -68,10 +76,7 @@ class Ticket extends Model
     {
         return $this->hasMany(ComplimentaryBookings::class);
     }
-    public function posBookings()
-    {
-        return $this->hasMany(PosBooking::class);
-    }
+
     public function AmusementPosBooking()
     {
         return $this->hasMany(AmusementPosBooking::class);
@@ -84,7 +89,7 @@ class Ticket extends Model
     {
         return $this->hasMany(AmusementBooking::class);
     }
-     // public function promocode()
+    // public function promocode()
     // {
     //     return $this->hasMany(PromoCode::class);
     // }
@@ -92,7 +97,7 @@ class Ticket extends Model
     {
         return $this->hasMany(AccessArea::class, 'id', 'access_area');
     }
-    
+
     // OR for array of IDs (access_area is stored as array or JSON in DB)
     public function getAccessAreaNamesAttribute()
     {

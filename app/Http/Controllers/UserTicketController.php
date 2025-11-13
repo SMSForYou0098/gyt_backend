@@ -27,7 +27,7 @@ class UserTicketController extends Controller
     public function ticketTransfer(Request $request)
     {
         $recipientData = $request->input('recipient');
-        $table = $request->input('table'); // e.g., Agent, Booking
+        $table = $request->input(key: 'table'); // e.g., Agent, Booking
         $type = strtolower($request->input('type')); // single | master
         $ticketSelectionType = $request->input('ticketSelectionType'); // all | individual
         $bookingId = $request->input('bookingId');

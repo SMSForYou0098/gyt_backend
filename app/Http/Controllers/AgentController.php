@@ -227,9 +227,7 @@ class AgentController extends Controller
                     $bookings[] = $booking;
 
                     if ($i === 0 && $user->hasRole('Agent') && (int) $request->tickets['quantity'] === 1) {
-
                         $newTotalCredits = $latestBalance->total_credits - $request->amount;
-
                         // Save new balance entry
                         $newBalance = new Balance();
                         $newBalance->user_id = $user->id;

@@ -158,14 +158,14 @@ class UserController extends Controller
         $permissions = $permissionService->check(['View Contact', 'View Email']);
         // return response()->json($permissions);
         $canViewContact = $permissions['View Contact'];
-        $canViewEmail   = $permissions['View Email'];
+        $canViewEmail = $permissions['View Email'];
 
         $allUsers = $users->map(function ($user) use ($canViewContact, $canViewEmail) {
             return [
                 'id' => $user->id,
                 'name' => $user->name,
                 'contact' => $canViewContact ? $user->number : null,
-                'email' =>  $canViewEmail ? $user->email : null,
+                'email' => $canViewEmail ? $user->email : null,
                 'role_name' => $user->roles->pluck('name')->first(),
                 'status' => $user->staus,
                 'reporting_user' => $user->reportingUser ? $user->reportingUser->name : null,
@@ -181,7 +181,7 @@ class UserController extends Controller
                 'value' => $user->id,
                 'label' => $user->name,
                 'number' => $canViewContact ? $user->number : null,
-                'email' =>  $canViewEmail ? $user->email : null,
+                'email' => $canViewEmail ? $user->email : null,
                 'role_name' => $user->roles->pluck('name')->first(),
             ];
         });
@@ -201,99 +201,12 @@ class UserController extends Controller
         ]);
     }
 
-
-    // public function index(Request $request)
-    // {
-    //     $loggedInUser = Auth::user();
-
-    //     // Date Filter
-    //     if ($request->has('date')) {
-    //         $dates = explode(',', $request->date);
-    //         if (count($dates) === 1 || ($dates[0] === $dates[1])) {
-    //             // Single date
-    //             $startDate = Carbon::parse($dates[0])->startOfDay();
-    //             $endDate = Carbon::parse($dates[0])->endOfDay();
-    //         } elseif (count($dates) === 2) {
-    //             // Date range
-    //             $startDate = Carbon::parse($dates[0])->startOfDay();
-    //             $endDate = Carbon::parse($dates[1])->endOfDay();
-    //         } else {
-    //             return response()->json(['status' => false, 'message' => 'Invalid date format'], 400);
-    //         }
-    //     } else {
-    //         // Default: Today's records
-    //         $startDate = Carbon::today()->startOfDay();
-    //         $endDate = Carbon::today()->endOfDay();
-    //     }
-
-    //     // Get users based on role and created_at filter
-    //     if ($loggedInUser->hasRole('Admin')) {
-    //         $users = User::with(['roles', 'reportingUser'])
-    //             ->whereBetween('created_at', [$startDate, $endDate])
-    //             ->latest()->get();
-    //     } else {
-    //         $users = User::with(['roles', 'reportingUser'])
-    //             ->where('reporting_user', $loggedInUser->id)
-    //             ->whereBetween('created_at', [$startDate, $endDate])
-    //             ->latest()->get();
-    //     }
-
-    //     // All detailed users
-    //     $allUsers = $users->map(function ($user) {
-    //         return [
-    //             'id' => $user->id,
-    //             'name' => $user->name,
-    //             'contact' => $user->number,
-    //             'email' => $user->email,
-    //             'role_name' => $user->roles->pluck('name')->first(),
-    //             'status' => $user->staus,
-    //             'reporting_user' => $user->reportingUser ? $user->reportingUser->name : null,
-    //             'organisation' => $user->organisation ?? null,
-    //             'created_at' => $user->created_at,
-    //             'authentication' => $user->authentication,
-    //         ];
-    //     });
-
-    //     // Users formatted for dropdowns, etc.
-    //     $formattedUsers = $users->map(function ($user) {
-    //         return [
-    //             'value' => $user->id,
-    //             'label' => $user->name,
-    //             'number' => $user->number,
-    //             'email' => $user->email,
-    //             'role_name' => $user->roles->pluck('name')->first(),
-    //         ];
-    //     });
-
-    //     // Organizers list
-    //     $organizers = User::role('Organizer')->get();
-    //     $org = $organizers->map(function ($user) {
-    //         return [
-    //             'value' => $user->id,
-    //             'label' => $user->name,
-    //         ];
-    //     });
-
-    //     return response()->json([
-    //         'status' => true,
-    //         'users' => $formattedUsers,
-    //         'allData' => $allUsers,
-    //         'organizers' => $org
-    //     ]);
-    // }
-
     public function create(Request $request, SmsService $smsService, WhatsappService $whatsappService)
     {
         try {
             $request->validate([
-                'number' => [
-                    'required',
-                    'string',
-                    'regex:/^\d{10}$|^\d{12}$/',
-                    Rule::unique('users', 'number')->whereNull('deleted_at'),
-                ],
+                'number' => 'required|string|unique:users,number',
             ], [
-                'number.regex' => 'The mobile number must be exactly 10 or 12 digits.',
                 'number.unique' => 'The mobile number has already been taken.',
             ]);
             if ($request->email) {
@@ -397,14 +310,14 @@ class UserController extends Controller
                 $organizer = $user;
 
                 if ($admin) {
-                    $adminData = (object)[
+                    $adminData = (object) [
                         'name' => $admin->name,
                         'number' => $admin->number,
                         'templateName' => 'new registatiion admin reminder',
                         'replacements' => [
-                            ':O_Name'       => $organizer->name,
-                            ':O_number'     => $organizer->number,
-                            ':C_Email'      => $organizer->email,
+                            ':O_Name' => $organizer->name,
+                            ':O_number' => $organizer->number,
+                            ':C_Email' => $organizer->email,
                             ':C_Registered' => $organizer->id,
                         ]
                     ];
@@ -415,14 +328,14 @@ class UserController extends Controller
                 // === Send to ORGANIZER ===
                 if ($organizer) {
                     $allowedDomain = rtrim(env('ALLOWED_DOMAIN', 'https://ssgarba.com/'), '/');
-                    $organizerData = (object)[
+                    $organizerData = (object) [
                         'name' => $organizer->name,
                         'number' => $organizer->number,
                         'templateName' => 'organizer registration',
                         'replacements' => [
                             ':S_Link' => $allowedDomain . '/',
                             // ':S_Link'     => 'https://getyourticket.in/',
-                            ':C_number'   => $admin->number,
+                            ':C_number' => $admin->number,
                         ]
                     ];
 
@@ -508,9 +421,11 @@ class UserController extends Controller
             $eventIds = json_decode($eventDataagent->event_id, true);
             $ticketIds = json_decode($eventDataagent->ticket_id, true);
 
-            $events = Event::with(['tickets' => function ($query) {
-                $query->select('id', 'event_id', 'name');
-            }])
+            $events = Event::with([
+                'tickets' => function ($query) {
+                    $query->select('id', 'event_id', 'name');
+                }
+            ])
                 ->whereIn('id', $eventIds)
                 ->select('id', 'name')
                 ->get();
@@ -732,7 +647,7 @@ class UserController extends Controller
 
                 if ($user->agreement_status == 1) {
                     $allowedDomain = rtrim(env('ALLOWED_DOMAIN', 'https://getyourticket.in/'), '/');
-                    $data = (object)[
+                    $data = (object) [
                         'name' => $user->name,
                         'number' => $user->number,
                         'templateName' => 'application approved',
@@ -747,7 +662,7 @@ class UserController extends Controller
                         // ],
 
                         'replacements' => [
-                            ':C_Name'         => $user->name,
+                            ':C_Name' => $user->name,
                             ':S_Link' => $allowedDomain . '/',
                             // ':S_Link'         => 'https://getyourticket.in/',
                         ]
@@ -756,7 +671,7 @@ class UserController extends Controller
 
                     $response = $smsService->send($data);
                     // $response = $whatsappService->send($data);
-                    $response =  $this->sendMail($user->email);
+                    $response = $this->sendMail($user->email);
 
                     // return response()->json($response);
                 }
@@ -1149,9 +1064,11 @@ class UserController extends Controller
         // $query = User::query();
         $query = User::query()
             ->select('name', 'email', 'number', 'organisation')
-            ->with(['roles' => function ($query) {
-                $query->select('id', 'name');
-            }])
+            ->with([
+                'roles' => function ($query) {
+                    $query->select('id', 'name');
+                }
+            ])
             ->where('id', '!=', $loggedInUser->id);
         // Check if user is Admin or not
         if (!$loggedInUser->hasRole('Admin')) {
@@ -1329,11 +1246,11 @@ class UserController extends Controller
                 ['user_id' => $userId], // condition to check existing
                 [
                     'event_id' => json_encode($request->events ?? []),
-                    'ticket_id'  => json_encode($request->tickets ?? []), // save tickets also
+                    'ticket_id' => json_encode($request->tickets ?? []), // save tickets also
                 ]
             );
 
-            return response()->json(['status' => true, 'message' => 'AgentEvent craete successfully',  'AgentEvents' => $created,], 200);
+            return response()->json(['status' => true, 'message' => 'AgentEvent craete successfully', 'AgentEvents' => $created,], 200);
         } catch (\Exception $e) {
             return response()->json(['status' => false, 'message' => 'Failed to AgentEvent '], 200);
         }
@@ -1348,7 +1265,7 @@ class UserController extends Controller
                 ['gate_id' => json_encode($request->gates) ?? []] // data to update or insert
             );
 
-            return response()->json(['status' => true, 'message' => 'ScannerGate craete successfully',  'ScannerGate' => $created,], 200);
+            return response()->json(['status' => true, 'message' => 'ScannerGate craete successfully', 'ScannerGate' => $created,], 200);
         } catch (\Exception $e) {
             return response()->json(['status' => false, 'message' => 'Failed to ScannerGate '], 200);
         }
@@ -1420,7 +1337,7 @@ class UserController extends Controller
 
                 $userTicket = UserTicket::updateOrCreate(
                     [
-                        'user_id'  => $userId,
+                        'user_id' => $userId,
                         'event_id' => $eventId,
                     ],
                     [
@@ -1609,13 +1526,13 @@ class UserController extends Controller
     // return $pdf->download("Organizer_Agreement_{$user->id}.pdf");
     // }
 
-//    public function viewAgreement($id)
+    //    public function viewAgreement($id)
 //     {
 //         $user = User::findOrFail($id);
 
-//         $data = $this->prepareAgreementData($user);
+    //         $data = $this->prepareAgreementData($user);
 
-//         return view('agreements.org-agreement', $data);
+    //         return view('agreements.org-agreement', $data);
 //     }
 
     public function downloadAgreement($id)
@@ -1625,37 +1542,37 @@ class UserController extends Controller
         $data = $this->prepareAgreementData($user);
 
         $pdf = Pdf::loadView('agreements.org-agreement', $data)
-                  ->setPaper('a4');
+            ->setPaper('a4');
 
         return $pdf->download("Organizer_Agreement_{$user->id}.pdf");
-       
+
     }
 
     private function prepareAgreementData($user)
     {
         return [
-            'signing_date'       => now()->format('d/m/Y'),
-            'org_name'           => $user->name ?? 'Organizer Pvt. Ltd.',
-            'org_type'           => $user->orgType?->title ?? 'Private Limited',
-            'org_reg_address'    => $user->org_office_address ?? 'Not Available',
-            'org_signatory'      => $user->org_name_signatory ?? 'Authorized Person',
-            'gst'                => $user->org_gst_no ?? 'N/A',
-            'pan'                => $user->pan_no ?? 'N/A',
-            'bank_beneficiary'   => $user->bank_beneficiary ?? 'N/A',
-            'bank_account'       => $user->bank_account ?? 'N/A',
-            'bank_ifsc'          => $user->bank_ifsc ?? 'N/A',
-            'bank_name'          => $user->bank_name ?? 'N/A',
-            'bank_branch'        => $user->bank_branch ?? 'N/A',
-            'event_name'         => $user->event_name ?? 'Sample Event',
-            'event_venue'        => $user->event_venue ?? 'Sample Venue',
-            'event_dates'        => $user->event_dates ?? '01-03 Oct 2025',
+            'signing_date' => now()->format('d/m/Y'),
+            'org_name' => $user->name ?? 'Organizer Pvt. Ltd.',
+            'org_type' => $user->orgType?->title ?? 'Private Limited',
+            'org_reg_address' => $user->org_office_address ?? 'Not Available',
+            'org_signatory' => $user->org_name_signatory ?? 'Authorized Person',
+            'gst' => $user->org_gst_no ?? 'N/A',
+            'pan' => $user->pan_no ?? 'N/A',
+            'bank_beneficiary' => $user->bank_beneficiary ?? 'N/A',
+            'bank_account' => $user->bank_account ?? 'N/A',
+            'bank_ifsc' => $user->bank_ifsc ?? 'N/A',
+            'bank_name' => $user->bank_name ?? 'N/A',
+            'bank_branch' => $user->bank_branch ?? 'N/A',
+            'event_name' => $user->event_name ?? 'Sample Event',
+            'event_venue' => $user->event_venue ?? 'Sample Venue',
+            'event_dates' => $user->event_dates ?? '01-03 Oct 2025',
             'commission_percent' => $user->commission_percent ?? 3,
-            'payment_terms'      => $user->payment_terms ?? 'Within 10 days after event',
-            'term_text'          => $user->term_text ?? '12 months',
-            'notice_to_name'     => 'Janak Rana',
-            'notice_to_email'    => 'janak@getyourticket.in',
-            'notice_to_address'  => '401, BLUE CRYSTAL COM, Vallabh Vidyanagar, Anand, Gujarat 388120',
-            'show_watermark'     => true,
+            'payment_terms' => $user->payment_terms ?? 'Within 10 days after event',
+            'term_text' => $user->term_text ?? '12 months',
+            'notice_to_name' => 'Janak Rana',
+            'notice_to_email' => 'janak@getyourticket.in',
+            'notice_to_address' => '401, BLUE CRYSTAL COM, Vallabh Vidyanagar, Anand, Gujarat 388120',
+            'show_watermark' => true,
         ];
     }
 }
