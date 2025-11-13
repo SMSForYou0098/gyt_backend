@@ -27,6 +27,7 @@ use Illuminate\Support\Facades\Cache;
 use Illuminate\Support\Facades\Log;
 use Maatwebsite\Excel\Facades\Excel;
 use App\Services\PermissionService;
+
 class BookingController extends Controller
 {
 
@@ -376,7 +377,7 @@ class BookingController extends Controller
         ], 200);
     }
 
-       public function AdminBookings(Request $request, $id, PermissionService $permissionService)
+    public function AdminBookings(Request $request, $id, PermissionService $permissionService)
     {
         try {
             $loggedInUser = Auth::user();
@@ -1014,21 +1015,21 @@ class BookingController extends Controller
         $eventName = $request->input('ticket_id');
         $status = $request->input('status');
         $dates = $request->input('date') ? explode(',', $request->input('date')) : [Carbon::today()->format('Y-m-d')];
-    
+
         $query = Booking::query();
-    
+
         if ($request->has('ticket_id')) {
             $query->where('ticket_id', $eventName);
         }
-    
+
         if ($request->has('user_id')) {
             $query->where('user_id', $Attendee);
         }
-    
+
         if ($request->has('status')) {
             $query->where('status', $status);
         }
-    
+
         if ($dates) {
             if (count($dates) === 1) {
                 $singleDate = Carbon::parse($dates[0])->toDateString();
@@ -1039,13 +1040,13 @@ class BookingController extends Controller
                 $query->whereBetween('created_at', [$startDate, $endDate]);
             }
         }
-    
+
         $bookings = $query->with(['userData', 'ticket.event.user'])->get();
-    
+
         // ✅ Group by session_id and count qty
         $groupedBookings = $bookings->groupBy('session_id')->map(function ($group) {
             $first = $group->first();
-    
+
             return [
                 'event_name'     => $first->ticket->event->name ?? 'N/A',
                 'org_name'       => $first->ticket->event->user->name ?? 'N/A',
@@ -1061,7 +1062,7 @@ class BookingController extends Controller
                 'created_at'     => $first->created_at
             ];
         })->values();
-    
+
         return Excel::download(new BookingExport($groupedBookings), 'Booking_export.xlsx');
     }
 
@@ -1161,36 +1162,43 @@ class BookingController extends Controller
         $bookings = PenddingBooking::where('session_id', $decryptedSessionId)->with('paymentLog')->get();
         $bookingMaster = PenddingBookingsMaster::where('session_id', $decryptedSessionId)->with('paymentLog')->get();
         $masterBookingIDs = [];
-        if ($bookings) {
+
+        if ($bookings->isNotEmpty()) {
             foreach ($bookings as $individualBooking) {
                 if ($status) {
                     $data = $individualBooking;
-                    $booking =   $this->bookingData($data);
+                    $booking = $this->bookingData($data);
+
                     if ($booking) {
                         $masterBookingIDs[] = $booking->id;
                         $individualBooking->delete();
                     }
                 }
+            }
 
-                $individualBooking->save();
+            // ✅ Send SMS/WhatsApp for single booking (no master)
+            if ($bookingMaster->isEmpty()) {
+                $firstBooking = Booking::where('session_id', $decryptedSessionId)->latest()->first();
+                if ($firstBooking) {
+                    $this->sendBookingNotification($firstBooking, false, 1, $firstBooking->token);
+                }
             }
         }
-        if ($bookingMaster->isNotEmpty()) {
 
+        if ($bookingMaster->isNotEmpty()) {
             if ($status) {
                 $updated = $this->updateMasterBooking($bookingMaster, $masterBookingIDs);
-
                 if ($updated) {
                     $bookingMaster->each->delete();
                 }
             }
         }
+
         return response()->json(['status' => true], 200);
     }
 
     private function bookingData($data)
     {
-
         $booking = new Booking();
         $booking->ticket_id = $data->ticket_id;
         $booking->user_id = $data->user_id;
@@ -1206,7 +1214,6 @@ class BookingController extends Controller
         $booking->payment_method = $data->payment_method;
         $booking->discount = $data->discount;
         $booking->status = $data->status = 0;
-        // $booking->status = $data->status;
         $booking->payment_status = 1;
         $booking->txnid = $data->txnid;
         $booking->device = $data->device;
@@ -1217,6 +1224,7 @@ class BookingController extends Controller
         $booking->gateway = $data->gateway;
         $booking->payment_id = optional($data->paymentLog)->payment_id;
         $booking->save();
+
         if (isset($booking->promocode_id)) {
             $promocode = Promocode::where('code', $booking->promocode_id)->first();
 
@@ -1243,6 +1251,7 @@ class BookingController extends Controller
             // Save updated promocode details
             $promocode->save();
         }
+        // Removed individual SMS send from here
         return $booking;
     }
 
@@ -1261,17 +1270,82 @@ class BookingController extends Controller
                 'updated_at' => now(),
             ];
 
-            // Create MasterBooking record
             $master = MasterBooking::create($data);
 
-            // If creation fails, return false
-            if (!$master) {
+            if ($master) {
+                // ✅ Get all related bookings
+                $relatedBookings = Booking::whereIn('id', $ids)->with('ticket.event')->get();
+                $totalQty = $relatedBookings->count();
+                $sampleBooking = $relatedBookings->first();
+
+                if ($sampleBooking) {
+                    // ✅ Only one message for all master bookings
+                    $this->sendBookingNotification($sampleBooking, true, $totalQty, $entry->order_id);
+                }
+            } else {
                 return false;
             }
         }
 
-        // Return true if all records are created successfully
         return true;
+    }
+
+    private function sendBookingNotification($booking, $isMaster = false, $qty = 1, $orderId = null)
+    {
+        $smsService = new \App\Services\SmsService();
+        $whatsappService = new \App\Services\WhatsappService();
+        $whatsappTemplate = \App\Models\WhatsappApi::where('title', 'Online Booking')->first();
+        $whatsappTemplateName = $whatsappTemplate->template_name ?? '';
+
+        $event = $booking->ticket->event ?? null;
+        if (!$event) return;
+
+        // ✅ Fix: Use order_id for master, token for single
+        $finalOrderId = $isMaster ? $orderId : $booking->token;
+
+        $shortLinksms = "getyourticket.in/t/{$finalOrderId}";
+
+        // Format event date & time
+        $dates = explode(',', $event->date_range ?? '');
+        $formattedDates = [];
+        foreach ($dates as $date) {
+            $formattedDates[] = \Carbon\Carbon::parse($date)->format('d-m-Y');
+        }
+        $dateRangeFormatted = implode(' | ', $formattedDates);
+        $eventDateTime = $dateRangeFormatted . ' | ' . $event->start_time . ' - ' . $event->end_time;
+
+        $mediaurl = $event->thumbnail ?? '';
+
+        $data = (object) [
+            'name' => $booking->name ?? 'Guest',
+            'number' => $booking->number ?? '0000000000',
+            'templateName' => 'Online Booking Template',
+            'whatsappTemplateData' => $whatsappTemplateName,
+            'shortLink' => $finalOrderId,
+            'insta_whts_url' => $event->insta_whts_url ?? 'helloinsta',
+            'mediaurl' => $mediaurl,
+            'values' => [
+                (string) ($booking->name ?? 'Guest'),
+                (string) ($booking->number ?? '0000000000'),
+                (string) ($event->name ?? 'Event'),
+                (string) ($qty),
+                (string) ($booking->ticket->name ?? 'Ticket'),
+                (string) ($event->address ?? 'Venue'),
+                (string) ($eventDateTime ?? 'DateTime'),
+                (string) ($event->whts_note ?? 'hello'),
+            ],
+            'replacements' => [
+                ':C_Name' => $booking->name,
+                ':T_QTY' => $qty,
+                ':Ticket_Name' => $booking->ticket->name ?? 'Ticket',
+                ':Event_Name' => $event->name,
+                ':Event_Date' => $eventDateTime,
+                ':S_Link' => $shortLinksms,
+            ]
+        ];
+
+        $smsService->send($data);
+        $whatsappService->send($data);
     }
 
     public function boxOfficeBooking($number)

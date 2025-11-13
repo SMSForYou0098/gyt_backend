@@ -5,6 +5,7 @@ namespace App\Http\Controllers;
 use App\Exports\EventExport;
 use App\Models\AgentEvent;
 use App\Models\AgentMaster;
+use App\Models\Banner;
 use App\Models\Category;
 use App\Models\CatLayout;
 use App\Models\Event;
@@ -1753,7 +1754,9 @@ class EventController extends Controller
                 'message' => 'No users found for this organisation.'
             ], 200);
         }
-
+  $banner = Banner::whereIn('org_id', $userIds)
+            ->select('id', 'org_id', 'images', 'title', 'external_url')
+            ->get();
         // 🔹 Get all events for all users in that organisation
         $query = Event::with([
             'organizer:id,organisation',
@@ -1793,7 +1796,8 @@ class EventController extends Controller
 
         return response()->json([
             'status' => true,
-            'data' => $events
+            'data' => $events,
+            'banner' => $banner->isEmpty() ? [] : $banner
         ], 200);
     }
 }

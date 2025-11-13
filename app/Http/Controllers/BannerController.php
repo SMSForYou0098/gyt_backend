@@ -11,7 +11,15 @@ class BannerController extends Controller
 
     public function index($type)
     {
-        $Banner = Banner::where('type', $type)->get();
+        $Banner = Banner::with(['user' => function ($q) {
+            $q->select('id', 'name', 'organisation');
+        }])->where('type', $type)->get();
+
+        $Banner->each(function ($item) {
+            if (!$item->user) {
+                $item->user = ['name' => null, 'organisation' => null];
+            }
+        });
         if ($Banner->isEmpty()) {
             return response()->json([
                 'status' => false,
@@ -34,6 +42,7 @@ class BannerController extends Controller
             $bannerData = new Banner();
             $bannerData->sr_no = $srNo;
             $bannerData->type = $type;
+             $bannerData->org_id = $request->org_id;
             $bannerData->category = $request->category;
             $bannerData->title = $request->title;
             $bannerData->description = $request->description;
@@ -99,6 +108,7 @@ class BannerController extends Controller
             // Update data fields
             $bannerData->category = $request->category;
             $bannerData->title = $request->title;
+            $bannerData->org_id = $request->org_id;
             $bannerData->description = $request->description;
             $bannerData->sub_description = $request->sub_description;
             $bannerData->button_link = $request->button_link;
