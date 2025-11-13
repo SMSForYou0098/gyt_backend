@@ -35,62 +35,122 @@ class DashboardController extends Controller
 {
     public function BookingCounts($id)
     {
-        $loggedInUser = Auth::user();  // This fetches the authenticated user via Laravel's Auth system
-        $isAdmin = $loggedInUser->hasRole('Admin');
-        $agentRole = Role::where('name', 'Agent')->first();
-        $sponsorRole = Role::where('name', 'Sponsor')->first();
-        $posRole = Role::where('name', 'POS')->first();
-        $scannerRole = Role::where('name', 'Scanner')->first();
-        $organizerRole = Role::where('name', 'Organizer')->first();
-        if ($isAdmin) {
-            $onlineBookingsTicketCount = Booking::count();
-            $onlineBookingsCount = Booking::distinct('session_id')->count('session_id');
+        $loggedInUser = Auth::user();
 
-            $agentBookingsTicketCount = Agent::count();
-            $agentBookingsCount = Agent::distinct('session_id')->count('session_id');
-
-            $sponsorBookingsTicketCount = SponsorBooking::count();
-            $sponsorBookingsCount = SponsorBooking::distinct('session_id')->count('session_id');
-
-            $posBookingsTicketCount = PosBooking::sum('quantity');
-            $posBookingsCount = PosBooking::count();
-
-            $userCount = User::count();
-            // Count users with 'Agent' role
-            $agentCount = $agentRole ? $agentRole->users()->count() : 0;
-            $sponsorCount = $sponsorRole ? $sponsorRole->users()->count() : 0;
-            // Count users with 'POS' role
-            $posCount = $posRole ? $posRole->users()->count() : 0;
-            // Count users with 'Scanner' role
-            $scannerCount = $scannerRole ? $scannerRole->users()->count() : 0;
-            $organizerCount = $organizerRole ? $organizerRole->users()->count() : 0;
-
-            $offlineBookingsTicket = $posBookingsTicketCount + $agentBookingsTicketCount + $sponsorBookingsTicketCount;
-            $offlineBookings = $agentBookingsCount + $sponsorBookingsCount + $posBookingsCount;
-
-            return response()->json([
-                'onlineBookingsTicket' => $onlineBookingsTicketCount,
-                'onlineBookings' => $onlineBookingsCount,
-                'offlineBookingsTicket' => $offlineBookingsTicket,
-                'offlineBookings' => $offlineBookings,
-                'userCount' => $userCount,
-                'agentCount' => $agentCount,
-                'sponsorCount' => $sponsorCount,
-                'posCount' => $posCount,
-                'organizerCount' => $organizerCount,
-                'scannerCount' => $scannerCount,
-                'status' => true,
-            ]);
-        } else {
-            // Fetch bookings for the logged-in user
-            $bookingsCount = Booking::where('user_id', $loggedInUser->id)->count();
+        // Regular user (not Admin or Organizer)
+        if (!$loggedInUser->hasRole(['Admin', 'Organizer'])) {
             return response()->json([
                 'status' => true,
-                'bookingsCount' => $bookingsCount,
+                'bookingsCount' => Booking::where('user_id', $loggedInUser->id)->count(),
             ]);
         }
+
+        // For Admin: get all data
+        // For Organizer: get only their hierarchy data
+        $isAdmin = $loggedInUser->hasRole('Admin');
+
+        // Get user IDs and ticket IDs based on role
+        if ($isAdmin) {
+            $userIds = User::pluck('id'); // All users
+            $ticketIds = null; // Admin sees all tickets
+        } else {
+            // Organizer: get all users in hierarchy (recursive)
+            $userIds = $this->getAllUsersUnder($loggedInUser->id);
+			//return $userIds;
+            // Get ticket IDs from organizer's events
+            $ticketIds = Event::where('user_id', $loggedInUser->id)
+                ->with('tickets')
+                ->get()
+                ->pluck('tickets.*.id')
+                ->flatten();
+        }
+
+        // Get role counts for users in scope
+        $roleCounts = Role::whereIn('name', ['Agent', 'Sponsor', 'POS', 'Scanner', 'Organizer'])
+            ->withCount([
+                'users' => function ($query) use ($userIds) {
+                    $query->whereIn('id', $userIds);
+                }
+            ])
+            ->pluck('users_count', 'name');
+
+        // Booking counts based on scope
+        if ($isAdmin) {
+            // Admin sees all bookings
+            $bookingCounts = [
+                'online_ticket' => Booking::count(),
+                'online_session' => Booking::distinct('session_id')->count('session_id'),
+                'agent_ticket' => Agent::count(),
+                'agent_session' => Agent::distinct('session_id')->count('session_id'),
+                'sponsor_ticket' => SponsorBooking::count(),
+                'sponsor_session' => SponsorBooking::distinct('session_id')->count('session_id'),
+                'pos_ticket' => PosBooking::sum('quantity') ?? 0,
+                'pos_count' => PosBooking::count(),
+            ];
+        } else {
+            // Organizer sees only their event's online bookings + hierarchy's offline bookings
+            $bookingCounts = [
+                'online_ticket' => Booking::whereIn('ticket_id', $ticketIds)->count(),
+                'online_session' => Booking::whereIn('ticket_id', $ticketIds)
+                    ->distinct('session_id')->count('session_id'),
+                'agent_ticket' => Agent::whereIn('agent_id', $userIds)->count(),
+                'agent_session' => Agent::whereIn('agent_id', $userIds)
+                    ->distinct('session_id')->count('session_id'),
+                'sponsor_ticket' => SponsorBooking::whereIn('user_id', $userIds)->count(),
+                'sponsor_session' => SponsorBooking::whereIn('user_id', $userIds)
+                    ->distinct('session_id')->count('session_id'),
+                'pos_ticket' => PosBooking::whereIn('user_id', $userIds)->sum('quantity') ?? 0,
+                'pos_count' => PosBooking::whereIn('user_id', $userIds)->count(),
+            ];
+        }
+
+        $offlineBookingsTicket = $bookingCounts['pos_ticket']
+            + $bookingCounts['agent_ticket']
+            + $bookingCounts['sponsor_ticket'];
+
+        $offlineBookings = $bookingCounts['agent_session']
+            + $bookingCounts['sponsor_session']
+            + $bookingCounts['pos_count'];
+
+        return response()->json([
+            'onlineBookingsTicket' => $bookingCounts['online_ticket'],
+            'onlineBookings' => $bookingCounts['online_session'],
+            'offlineBookingsTicket' => $offlineBookingsTicket,
+            'offlineBookings' => $offlineBookings,
+            'userCount' => count($userIds),
+            'agentCount' => $roleCounts['Agent'] ?? 0,
+            'sponsorCount' => $roleCounts['Sponsor'] ?? 0,
+            'posCount' => $roleCounts['POS'] ?? 0,
+            'organizerCount' => $roleCounts['Organizer'] ?? 0,
+            'scannerCount' => $roleCounts['Scanner'] ?? 0,
+            'status' => true,
+        ]);
     }
 
+    /**
+     * Recursively get all users under a given user (including nested levels)
+     */
+    private function getAllUsersUnder($userId)
+    {
+        $userIds = collect();
+
+        // Get direct children
+        $directUsers = User::where('reporting_user', $userId)->pluck('id');
+		//return $directUsers;
+        if ($directUsers->isEmpty()) {
+            return $userIds;
+        }
+
+        // Add direct children
+        $userIds = $userIds->merge($directUsers);
+
+        // Recursively get children of each direct child
+        foreach ($directUsers as $childId) {
+            $userIds = $userIds->merge($this->getAllUsersUnder($childId));
+        }
+
+        return $userIds->unique();
+    }
     public function calculateSale(Request $request)
     {
         $loggedInUser = Auth::user();
@@ -151,11 +211,6 @@ class DashboardController extends Controller
 
                 $ticketIds = Ticket::whereIn('event_id', Event::where('user_id', $request->user()->id)->pluck('id'))->pluck('id');
                 $allBookings = Booking::whereIn('ticket_id', $ticketIds)->get();
-                // $easebuzzTotalAmount = Booking::where('gateway', 'easebuzz')->sum('amount');
-                // $instamojoTotalAmount = Booking::where('gateway', 'instamojo')->sum('amount');
-                // $phonepeTotalAmount = Booking::where('gateway', 'phonepe')->sum('amount');
-                // $cashfreeTotalAmount = Booking::where('gateway', 'cashfree')->sum('amount');
-                // $razorpayTotalAmount = Booking::where('gateway', 'razorpay')->sum('amount');
                 $easebuzzTotalAmount = Booking::whereIn('ticket_id', $ticketIds)->where('gateway', 'easebuzz')->sum('amount');
                 $instamojoTotalAmount = Booking::whereIn('ticket_id', $ticketIds)->where('gateway', 'instamojo')->sum('amount');
                 $phonepeTotalAmount = Booking::whereIn('ticket_id', $ticketIds)->where('gateway', 'phonepe')->sum('amount');
@@ -1131,227 +1186,6 @@ class DashboardController extends Controller
         ];
     }
 
-
-  // public function getDashboardSummary($type, Request $request)
-    // {
-    //     $user = auth()->user();
-
-    //     $totalAmount = 0;
-    //     $totalDiscount = 0;
-    //     $totalBookings = 0;
-    //     $totalTickets = 0;
-    //     $easebuzzTotalAmount = 0;
-    //     $instamojoTotalAmount = 0;
-    //     $phonepeTotalAmount = 0;
-    //     $cashfreeTotalAmount = 0;
-    //     $razorpayTotalAmount = 0;
-    //     $cashAmount = 0;
-    //     $upiAmount = 0;
-    //     $cardAmount = 0;
-    //     $totalCountScanHistory = 0;
-    //     $todayCountScanHistory = 0;
-
-    //     $startDate = null;
-    //     $endDate = null;
-
-    //     if ($request->has('date')) {
-    //         $dates = explode(',', $request->date);
-    //         if (count($dates) === 1 || ($dates[0] === $dates[1])) {
-    //             // Single date
-    //             $startDate = Carbon::parse($dates[0])->startOfDay();
-    //             $endDate = Carbon::parse($dates[0])->endOfDay();
-    //         } elseif (count($dates) === 2) {
-    //             // Date range
-    //             $startDate = Carbon::parse($dates[0])->startOfDay();
-    //             $endDate = Carbon::parse($dates[1])->endOfDay();
-    //         } else {
-    //             return response()->json(['status' => false, 'message' => 'Invalid date format'], 400);
-    //         }
-    //     } else {
-    //         // Default: Today's bookings
-    //         $startDate = Carbon::today()->startOfDay();
-    //         $endDate = Carbon::today()->endOfDay();
-    //     }
-
-    //     // Define base query based on type
-    //     switch ($type) {
-    //         case 'online':
-    //             $query = Booking::whereBetween('created_at', [$startDate, $endDate]);
-    //             $totalTickets = Booking::whereBetween('created_at', [$startDate, $endDate])->count('token');
-    //             $easebuzzTotalAmount = Booking::whereBetween('created_at', [$startDate, $endDate])
-    //                 ->where('gateway', 'easebuzz')
-    //                 ->sum('amount');
-
-    //             $instamojoTotalAmount = Booking::whereBetween('created_at', [$startDate, $endDate])
-    //                 ->where('gateway', 'instamojo')
-    //                 ->sum('amount');
-    //             $phonepeTotalAmount = Booking::whereBetween('created_at', [$startDate, $endDate])
-    //                 ->where('gateway', 'phonepe')
-    //                 ->sum('amount');
-    //             $cashfreeTotalAmount = Booking::whereBetween('created_at', [$startDate, $endDate])
-    //                 ->where('gateway', 'cashfree')
-    //                 ->sum('amount');
-    //             $razorpayTotalAmount = Booking::whereBetween('created_at', [$startDate, $endDate])
-    //                 ->where('gateway', 'razorpay')
-    //                 ->sum('amount');
-    //             break;
-
-    //         case 'amusement-online':
-    //             $query = AmusementBooking::whereBetween('created_at', [$startDate, $endDate]);
-    //             $totalTickets = AmusementBooking::whereBetween('created_at', [$startDate, $endDate])->count('token');
-    //             break;
-
-    //         case 'agent':
-    //             $query = Agent::whereBetween('created_at', [$startDate, $endDate]);
-
-    //             // Apply role-based filtering for agent bookings
-    //             if ($user->hasRole('Agent')) {
-    //                 $query->where('agent_id', $user->id);
-    //             } elseif ($user->hasRole('Organizer')) {
-    //                 $eventIds = Event::where('user_id', $user->id)->pluck('id');
-    //                 $ticketIds = Ticket::whereIn('event_id', $eventIds)->pluck('id');
-    //                 $query->whereIn('ticket_id', $ticketIds);
-    //             }
-    //             // Admin sees all - no additional filtering
-
-    //             $totalTickets = $query->count('token');
-
-    //             $agentBookings = $query->get();
-
-    //             $cashAmount = $agentBookings->filter(fn($b) => strtolower($b->payment_method ?? '') === 'cash')->sum('amount');
-    //             $upiAmount = $agentBookings->filter(fn($b) => strtolower($b->payment_method ?? '') === 'upi')->sum('amount');
-    //             $cardAmount = $agentBookings->filter(fn($b) => strtolower($b->payment_method ?? '') === 'net banking')->sum('amount');
-    //             break;
-
-    //         case 'sponsor':
-    //             $query = SponsorBooking::whereBetween('created_at', [$startDate, $endDate]);
-
-    //             if ($user->hasRole('Sponsor')) {
-    //                 $query->where('sponsor_id', $user->id);
-    //             }
-
-    //             $totalTickets = $query->count('token');
-    //             break;
-
-    //         case 'accreditation':
-    //             $query = AccreditationBooking::whereBetween('created_at', [$startDate, $endDate]);
-
-    //             if ($user->hasRole('Accreditation')) {
-    //                 $query->where('accreditation_id', $user->id);
-    //             }
-
-    //             $totalTickets = $query->count('token');
-    //             break;
-
-    //         case 'amusement-agent':
-    //             $query = AmusementAgentBooking::whereBetween('created_at', [$startDate, $endDate]);
-    //             $totalTickets = AmusementAgentBooking::whereBetween('created_at', [$startDate, $endDate])->count('token');
-    //             break;
-
-    //         case 'pos':
-    //             $query = PosBooking::whereBetween('created_at', [$startDate, $endDate]);
-    //             if ($user->hasRole('POS')) {
-    //                 $query->where('user_id', $user->id);
-    //             }
-    //             $totalTickets = $query->sum('quantity');
-
-    //             // Add payment method breakdown
-    //             $posBookings = $query->with('user')->get();
-    //             $cashAmount = $posBookings->filter(fn($b) => strtolower($b->user->payment_method ?? '') === 'cash')->sum('amount');
-    //             $upiAmount = $posBookings->filter(fn($b) => strtolower($b->user->payment_method ?? '') === 'upi')->sum('amount');
-    //             $cardAmount = $posBookings->filter(fn($b) => strtolower($b->user->payment_method ?? '') === 'card')->sum('amount');
-    //             break;
-
-    //         case 'corporate':
-    //             $query = CorporateBooking::whereBetween('created_at', [$startDate, $endDate]);
-    //             if ($user->hasRole('Corporate')) {
-    //                 $query->where('user_id', $user->id);
-    //             }
-    //             $totalTickets = $query->sum('quantity');
-
-    //             // Add payment method breakdown
-    //             $posBookings = $query->with('user')->get();
-    //             $cashAmount = $posBookings->filter(fn($b) => strtolower($b->user->payment_method ?? '') === 'cash')->sum('amount');
-    //             $upiAmount = $posBookings->filter(fn($b) => strtolower($b->user->payment_method ?? '') === 'upi')->sum('amount');
-    //             $cardAmount = $posBookings->filter(fn($b) => strtolower($b->user->payment_method ?? '') === 'card')->sum('amount');
-    //             break;
-
-    //         case 'amusement-pos':
-    //             $query = AmusementPosBooking::whereBetween('created_at', [$startDate, $endDate]);
-    //             $totalTickets = AmusementPosBooking::whereBetween('created_at', [$startDate, $endDate])->sum('quantity');
-    //             break;
-
-    //         case 'pending bookings':
-    //             $query = PenddingBooking::whereBetween('created_at', [$startDate, $endDate]);
-    //             $totalTickets = PenddingBooking::whereBetween('created_at', [$startDate, $endDate])->count('token');
-    //             break;
-
-    //         case 'exhibition':
-    //             $query = ExhibitionBooking::whereBetween('created_at', [$startDate, $endDate]);
-    //             $totalTickets = ExhibitionBooking::whereBetween('created_at', [$startDate, $endDate])->sum('quantity');
-    //             break;
-
-    //         case 'scan history':
-    //             $totalCountScanHistory = ScanHistory::count();
-    //             $todayCountScanHistory = ScanHistory::whereBetween('created_at', [$startDate, $endDate])->count();
-    //             $query = null;
-    //             break;
-
-    //         default:
-    //             return response()->json([
-    //                 'error' => 'Invalid type provided. Use online, agent, pos, or pending.',
-    //             ], 400);
-    //     }
-
-    //     // Apply general role-based filtering (except for agent case which is handled above)
-    //     if ($type !== 'agent' && $query !== null) {
-    //         if ($user->hasRole('Admin')) {
-    //             $eventIds = Event::pluck('id');
-    //             $ticketIds = Ticket::pluck('id');
-    //             $query->whereIn('ticket_id', $ticketIds);
-    //         } else if ($user->hasRole('Organizer')) {
-    //             $eventIds = Event::where('user_id', $user->id)->pluck('id');
-    //             $ticketIds = Ticket::whereIn('event_id', $eventIds)->pluck('id');
-    //             $query->whereIn('ticket_id', $ticketIds);
-    //         } elseif ($user->hasRole('Agent')) {
-    //             $query->where('agent_id', $user->id);
-    //         } elseif ($user->hasRole('Sponsor')) {
-    //             $query->where('sponsor_id', $user->id);
-    //         } elseif ($user->hasRole('Accreditation')) {
-    //             $query->where('accreditation_id', $user->id);
-    //         }
-    //     }
-
-    //     // Fetch totals based on filtered query
-    //     if ($query !== null) {
-    //         $totalAmount = $query->sum('amount');
-    //         $totalDiscount = $query->sum('discount');
-
-    //         if ($type == 'accreditation') {
-    //             $totalBookings = $query->whereNotNull('amount')->count();
-    //         } else {
-    //             $totalBookings = $query->whereNotNull('amount')->where('amount', '>', 0)->count();
-    //         }
-    //     }
-
-    //     return response()->json([
-    //         'totalAmount' => $totalAmount,
-    //         'totalDiscount' => $totalDiscount,
-    //         'totalBookings' => $totalBookings,
-    //         'totalTickets' => $totalTickets,
-    //         'easebuzzTotalAmount' => $easebuzzTotalAmount,
-    //         'instamojoTotalAmount' => $instamojoTotalAmount,
-    //         'phonepeTotalAmount' => $phonepeTotalAmount,
-    //         'cashfreeTotalAmount' => $cashfreeTotalAmount,
-    //         'razorpayTotalAmount' => $razorpayTotalAmount,
-    //         'cashAmount' => $cashAmount,
-    //         'upiAmount' => $upiAmount,
-    //         'cardAmount' => $cardAmount,
-    //         'totalCountScanHistory' => $totalCountScanHistory,
-    //         'todayCountScanHistory' => $todayCountScanHistory,
-    //     ]);
-    // }
-
     public function getDashboardSummary($type, Request $request)
     {
         $user = auth()->user();
@@ -1370,6 +1204,7 @@ class DashboardController extends Controller
         $cardAmount = 0;
         $totalCountScanHistory = 0;
         $todayCountScanHistory = 0;
+        
 
         $startDate = null;
         $endDate = null;
@@ -1389,7 +1224,7 @@ class DashboardController extends Controller
             $startDate = Carbon::today()->startOfDay();
             $endDate = Carbon::today()->endOfDay();
         }
-
+		$ticketSales = $this->eventWiseTicketSales($startDate, $endDate, $type);
         // Base query
         switch ($type) {
             case 'online':
@@ -1535,8 +1370,100 @@ class DashboardController extends Controller
             'cardAmount' => $cardAmount,
             'totalCountScanHistory' => $totalCountScanHistory,
             'todayCountScanHistory' => $todayCountScanHistory,
+            'ticketSales' => $ticketSales
         ]);
     }
+  
+  
+    public function eventWiseTicketSales($startDate = null, $endDate = null, $type = 'online')
+    {
+          $loggedInUser = Auth::user();
+          $isAdmin = $loggedInUser->hasRole('Admin');
+
+          // Check authorization
+          if (!$isAdmin && !$loggedInUser->hasRole('Organizer')) {
+              return response()->json([
+                  'status' => false,
+                  'message' => 'Unauthorized access',
+              ], 403);
+          }
+
+          // Determine which booking relationship to use based on type
+          $bookingRelation = match($type) {
+              'agent' => 'agentBooking',
+              'pos' => 'posBookings',
+              'sponsor' => 'sponsorBookings',
+              'online' => 'bookings',
+              default => 'bookings',
+          };
+
+          // Build base query
+          $query = Event::query();
+
+          // Apply user filter for non-admin
+          if (!$isAdmin) {
+              $query->where('user_id', $loggedInUser->id);
+          }
+
+          // Apply eager loading with count/sum
+          $events = $query->with([
+              'tickets' => function ($q) use ($startDate, $endDate, $bookingRelation, $type) {
+                  if ($type === 'pos') {
+                      // For POS, sum the quantity field
+                      $q->withSum([$bookingRelation => function ($query) use ($startDate, $endDate) {
+                          if ($startDate && $endDate) {
+                              $query->whereBetween('created_at', [$startDate, $endDate]);
+                          }
+                      }], 'quantity');
+                  } else {
+                      // For others, count the records
+                      $q->withCount([$bookingRelation => function ($query) use ($startDate, $endDate) {
+                          if ($startDate && $endDate) {
+                              $query->whereBetween('created_at', [$startDate, $endDate]);
+                          }
+                      }]);
+                  }
+              }
+          ])->get();
+
+          $eventSales = [];
+
+          foreach ($events as $event) {
+              $ticketsArr = [];
+
+              foreach ($event->tickets as $ticket) {
+                  // Determine the field name based on type
+                  if ($type === 'pos') {
+                      // For POS, use sum field
+                      $countField = \Illuminate\Support\Str::snake($bookingRelation) . '_sum_quantity';
+                  } else {
+                      // For others, use count field
+                      $countField = \Illuminate\Support\Str::snake($bookingRelation) . '_count';
+                  }
+
+                  $bookingsCount = (int) ($ticket->$countField ?? 0);
+
+                  // Skip tickets with 0 bookings
+                  if ($bookingsCount > 0) {
+                      $ticketsArr[] = [
+                          'name' => $ticket->name,
+                          'count' => $bookingsCount,
+                      ];
+                  }
+              }
+
+              // Only add event if it has at least one ticket with bookings
+              if (!empty($ticketsArr)) {
+                  $eventSales[] = [
+                      'name' => $event->name,
+                      'tickets' => $ticketsArr,
+                  ];
+              }
+          }
+
+          return $eventSales;
+    }
+  
     public function getAllData()
     {
         try {

@@ -271,7 +271,7 @@ class DashboardController extends Controller
                 ];
 
                 return array_merge(
-                    $this->calculation(0, 0,0,0,0, $onlineBookings, $offlineBookings, 0, $posTotals, $isCorporate, 'POS'),
+                    $this->calculation(0, 0, 0, 0, 0, $onlineBookings, $offlineBookings, 0, $posTotals, $isCorporate, 'POS'),
                     ['weeklyData' => $this->getWeeklySalesDataForAgents($loggedInUser->id)],
                     ['weeklyDataForCF' => $this->getWeeklyCFDataForAgents($loggedInUser->id)]
                 );
@@ -341,7 +341,7 @@ class DashboardController extends Controller
                 ];
 
                 return array_merge(
-                    $this->calculation(0, 0,0,0,0, $onlineBookings, $offlineBookings, 0, $posTotals, $isCorporate, 'Agent'),
+                    $this->calculation(0, 0, 0, 0, 0, $onlineBookings, $offlineBookings, 0, $posTotals, $isCorporate, 'Agent'),
                     ['weeklyData' => $this->getWeeklySalesDataForAgents($loggedInUser->id)],
                     ['weeklyDataForCF' => $this->getWeeklyCFDataForAgents($loggedInUser->id)]
                 );
@@ -411,7 +411,7 @@ class DashboardController extends Controller
                 ];
 
                 return array_merge(
-                    $this->calculation(0, 0,0,0,0, $onlineBookings, $offlineBookings, $sponsorBookings,0, $posTotals, $isCorporate, 'Sponsor'),
+                    $this->calculation(0, 0, 0, 0, 0, $onlineBookings, $offlineBookings, $sponsorBookings, 0, $posTotals, $isCorporate, 'Sponsor'),
                     ['weeklyData' => $this->getWeeklySalesDataForSponsor($loggedInUser->id)],
                     ['weeklyDataForCF' => $this->getWeeklyCFDataForSponsor($loggedInUser->id)]
                 );
@@ -497,7 +497,7 @@ class DashboardController extends Controller
                 ];
 
                 return array_merge(
-                    $this->calculation(0, 0,0,0,0, $onlineBookings, $offlineBookings, 0, $posTotals, $isCorporate, $isCorporate, 'POS'),
+                    $this->calculation(0, 0, 0, 0, 0, $onlineBookings, $offlineBookings, 0, $posTotals, $isCorporate, $isCorporate, 'POS'),
                     ['weeklyData' => $this->getWeeklySalesDataForAgents($loggedInUser->id)],
                     ['weeklyDataForCF' => $this->getWeeklyCFDataForAgents($loggedInUser->id)]
                 );
@@ -1374,7 +1374,7 @@ class DashboardController extends Controller
             $startDate = Carbon::today()->startOfDay();
             $endDate = Carbon::today()->endOfDay();
         }
-
+        $ticketSales = $this->eventWiseTicketSales($startDate, $endDate, $type);
         // Define base query based on type
         switch ($type) {
             case 'online':
@@ -1551,9 +1551,88 @@ class DashboardController extends Controller
             'cardAmount' => $cardAmount,
             'totalCountScanHistory' => $totalCountScanHistory,
             'todayCountScanHistory' => $todayCountScanHistory,
+            'ticketSales' => $ticketSales
         ]);
     }
 
+    public function eventWiseTicketSales($startDate = null, $endDate = null, $type = 'online')
+    {
+        $loggedInUser = Auth::user();
+        $isAdmin = $loggedInUser->hasRole('Admin');
+
+        // Determine which booking relationship to use based on type
+        $bookingRelation = match ($type) {
+            'agent' => 'agentBookings',
+            'pos' => 'posBookings',
+            'sponsor' => 'sponsorBookings',
+            'online' => 'bookings',
+            default => 'bookings',
+        };
+
+        // Get events based on role and eager-load ticket bookings count with date filter
+        if ($isAdmin) {
+            $events = Event::with([
+                'tickets' => function ($q) use ($startDate, $endDate, $bookingRelation) {
+                    $q->withCount([
+                        $bookingRelation => function ($query) use ($startDate, $endDate) {
+                            if ($startDate && $endDate) {
+                                $query->whereBetween('created_at', [$startDate, $endDate]);
+                            }
+                        }
+                    ]);
+                }
+            ])->get();
+        } else if ($loggedInUser->hasRole('Organizer')) {
+            $events = Event::where('user_id', $loggedInUser->id)
+                ->with([
+                    'tickets' => function ($q) use ($startDate, $endDate, $bookingRelation) {
+                        $q->withCount([
+                            $bookingRelation => function ($query) use ($startDate, $endDate) {
+                                if ($startDate && $endDate) {
+                                    $query->whereBetween('created_at', [$startDate, $endDate]);
+                                }
+                            }
+                        ]);
+                    }
+                ])
+                ->get();
+        } else {
+            return response()->json([
+                'status' => false,
+                'message' => 'Unauthorized access',
+            ], 403);
+        }
+
+        $eventSales = [];
+
+        foreach ($events as $event) {
+            $ticketsArr = [];
+
+            foreach ($event->tickets as $ticket) {
+                // Get the count based on the booking type
+                $countField = $bookingRelation . '_count';
+                $bookingsCount = (int) ($ticket->$countField ?? 0);
+
+                // Skip tickets with 0 bookings
+                if ($bookingsCount > 0) {
+                    $ticketsArr[] = [
+                        'name' => $ticket->name,
+                        'count' => $bookingsCount,
+                    ];
+                }
+            }
+
+            // Only add event if it has at least one ticket with bookings
+            if (!empty($ticketsArr)) {
+                $eventSales[] = [
+                    'name' => $event->name,
+                    'tickets' => $ticketsArr,
+                ];
+            }
+        }
+
+        return $eventSales;
+    }
     public function getAllData()
     {
         try {
