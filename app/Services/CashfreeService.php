@@ -15,8 +15,8 @@ class CashfreeService
         // Initialize Cashfree configuration
         $this->cashfree = new Cashfree(
              0, // XEnvironment (0 = SANDBOX, 1 = PRODUCTION)
-            'TEST107498867fb87814e7962565f53a68894701', // XClientId
-            'cfsk_ma_test_11a1594c63ea4a86022cb181e15ece79_f0aa7ff6', // XClientSecret
+ env('CASHFREE_CLIENT_ID'), // XClientId
+     env('CASHFREE_CLIENT_SECRET'), // XClientSecret
             '', // XPartnerApiKey (empty for non-partner accounts)
             '', // XPartnerMerchantId (empty for non-partner accounts)
             '', // XClientSignature (empty if not using signature)
