@@ -1,0 +1,46 @@
+# PHPUnit cache
+/.phpunit.cache
+
+# Node modules
+/node_modules
+
+# Compiled build files and hot reloading files
+/public/build
+/public/hot
+
+# Public storage directory (usually a symlink)
+public/storage
+public/uploads
+
+# Secret keys and logs
+/storage/*.key
+
+# Composer vendor directory
+/vendor
+
+# Environment files
+.env
+.env.backup
+.env.production
+
+# PHPUnit result cache
+.phpunit.result.cache
+
+# Homestead configuration files
+Homestead.json
+Homestead.yaml
+
+# Authentication config (Composer)
+auth.json
+
+# NPM/Yarn debug files
+npm-debug.log
+yarn-error.log
+
+# Fleet directory
+/.fleet
+
+# IDE/editor specific settings
+/.idea
+/.vscode
+
