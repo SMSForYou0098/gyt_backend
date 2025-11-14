@@ -113,6 +113,7 @@ Route::middleware(['restrict.ip'])->group(function () {
     Route::get('/settings', [SettingController::class, 'index']);
 
     Route::get('/getAllData', [DashboardController::class, 'getAllData']);
+    Route::get('/gateway-wise-sales', [DashboardController::class, 'gatewayWiseSales']);
 
     // role routes
     Route::get('events', [EventController::class, 'index']);
@@ -141,7 +142,7 @@ Route::middleware(['restrict.ip'])->group(function () {
     Route::get('attendees-chek-in/{orderId}', [ScanController::class, 'attendeesChekIn']);
     Route::post('attendees-verify/{orderId}', [ScanController::class, 'attendeesVerify']);
     Route::get('tickets/{id}', [TicketController::class, 'index']);
- Route::get('org-events/{organisation}', [EventController::class, 'landingOrgId']);
+    Route::get('org-events/{organisation}', [EventController::class, 'landingOrgId']);
 
     Route::middleware(['auth:api'])->group(function () {
         Route::get('verify-user-settion', [AuthController::class, 'verifyUserSession']);
@@ -247,7 +248,8 @@ Route::middleware(['restrict.ip'])->group(function () {
 
 
         Route::get('bookings/{id}', [BookingController::class, 'index']);
-        Route::get('master-bookings/{id}', [BookingController::class, 'AdminBookings'])->middleware('permission:View Total Bookings');;
+        Route::get('master-bookings/{id}', [BookingController::class, 'AdminBookings'])->middleware('permission:View Total Bookings');
+        ;
         Route::post('booking-mail/{id}', [BookingController::class, 'sendBookingMail']);
         Route::get('agent-bookings/{id}', [BookingController::class, 'agentBooking']);
         Route::get('sponsor-bookings/{id}', [BookingController::class, 'sponsorBooking']);
@@ -262,7 +264,7 @@ Route::middleware(['restrict.ip'])->group(function () {
         Route::post('pendding-booking/{id}', [BookingController::class, 'penddingBooking']);
 
         //amusement
-        Route::get('amusement-bookings/{id}', [AmusementBookingController::class,  'onlineBookings']);
+        Route::get('amusement-bookings/{id}', [AmusementBookingController::class, 'onlineBookings']);
 
         //amusement agent booking
         // Route::get('amusement-agents-bookings/{id}', [AmusementAgentBookingController::class, 'agentAmusementBooking']);
