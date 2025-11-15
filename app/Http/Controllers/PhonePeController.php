@@ -48,10 +48,12 @@ class PhonePeController extends Controller
                 'mobile_number' => 'nullable|string|size:10',
             ]);
 
-             $config = PhonePe::where('user_id', $request->organizer_id)->firstOrFail();
              $adminConfig = PhonePe::where('user_id', User::role('Admin')->value('id'))->first();
-             $clientId = $config->client_id ?? $adminConfig->client_id;
-             $clientSecret = $config->client_secret ?? $adminConfig->secret;
+            //  $config = PhonePe::where('user_id', $request->organizer_id)->firstOrFail();
+             $clientId =  $adminConfig->client_id;
+             $clientSecret = $adminConfig->secret;
+             //  $clientSecret = $config->client_secret ?? $adminConfig->secret;
+            //  $clientId = $config->client_id ?? $adminConfig->client_id;
           
             $gateway = 'phonepe';
             $getSession = $this->generateEncryptedSessionId();
