@@ -1381,7 +1381,13 @@ class DashboardController extends Controller
         $isAdmin = $loggedInUser->hasRole('Admin');
 
         // Check authorization
-        if (!$isAdmin && !$loggedInUser->hasRole('Organizer')) {
+        if (!$isAdmin && 
+        !$loggedInUser->hasRole('Organizer') && 
+        !$loggedInUser->hasRole('POS') && 
+        !$loggedInUser->hasRole('Scanner') &&
+        !$loggedInUser->hasRole('Sponsor') &&
+        !$loggedInUser->hasRole('Agent')
+        ) {
             return response()->json([
                 'status' => false,
                 'message' => 'Unauthorized access',
@@ -1711,7 +1717,13 @@ class DashboardController extends Controller
         $isOrganizer = $loggedInUser->hasRole('Organizer');
 
         // Check authorization
-        if (!$isAdmin && !$isOrganizer) {
+        if (!$isAdmin && 
+        !$loggedInUser->hasRole('Organizer') && 
+        !$loggedInUser->hasRole('POS') && 
+        !$loggedInUser->hasRole('Scanner') &&
+        !$loggedInUser->hasRole('Sponsor') &&
+        !$loggedInUser->hasRole('Agent')
+        ) {
             return response()->json([
                 'status' => false,
                 'message' => 'Unauthorized access',
