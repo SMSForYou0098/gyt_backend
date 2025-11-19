@@ -113,7 +113,7 @@ Route::middleware(['restrict.ip'])->group(function () {
     Route::get('/settings', [SettingController::class, 'index']);
 
     Route::get('/getAllData', [DashboardController::class, 'getAllData']);
-    Route::get('/gateway-wise-sales', [DashboardController::class, 'gatewayWiseSales']);
+
 
     // role routes
     Route::get('events', [EventController::class, 'index']);
@@ -151,11 +151,12 @@ Route::middleware(['restrict.ip'])->group(function () {
         Route::get('/calculateSale/{id}', [DashboardController::class, 'calculateSale']);
         Route::get('org/dashbord', [DashboardController::class, 'organizerWeeklyReport']);
         Route::get('/getDashboardSummary/{type}', [DashboardController::class, 'getDashboardSummary']);
+        Route::get('organizer/summary', [DashboardController::class, 'organizerTotals']);
         Route::get('/payment-log', [DashboardController::class, 'getPaymentLog']);
         Route::delete('/flush-payment-log', [DashboardController::class, 'PaymentLogDelet']);
 
         Route::get('login-history', [LoginHistoryController::class, 'index'])->middleware('permission:View Login History');
-
+        Route::get('/gateway-wise-sales', [DashboardController::class, 'gatewayWiseSales']);
         // Route::get('/getAllData/{id}', [DashboardController::class, 'getAllData']);
 
         Route::post('/create-role', [RolePermissionController::class, 'createRole'])->middleware('permission:Create Role');
@@ -248,8 +249,7 @@ Route::middleware(['restrict.ip'])->group(function () {
 
 
         Route::get('bookings/{id}', [BookingController::class, 'index']);
-        Route::get('master-bookings/{id}', [BookingController::class, 'AdminBookings'])->middleware('permission:View Total Bookings');
-        ;
+        Route::get('master-bookings/{id}', [BookingController::class, 'AdminBookings'])->middleware('permission:View Total Bookings');;
         Route::post('booking-mail/{id}', [BookingController::class, 'sendBookingMail']);
         Route::get('agent-bookings/{id}', [BookingController::class, 'agentBooking']);
         Route::get('sponsor-bookings/{id}', [BookingController::class, 'sponsorBooking']);

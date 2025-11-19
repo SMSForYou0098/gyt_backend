@@ -1381,12 +1381,13 @@ class DashboardController extends Controller
         $isAdmin = $loggedInUser->hasRole('Admin');
 
         // Check authorization
-        if (!$isAdmin && 
-        !$loggedInUser->hasRole('Organizer') && 
-        !$loggedInUser->hasRole('POS') && 
-        !$loggedInUser->hasRole('Scanner') &&
-        !$loggedInUser->hasRole('Sponsor') &&
-        !$loggedInUser->hasRole('Agent')
+        if (
+            !$isAdmin &&
+            !$loggedInUser->hasRole('Organizer') &&
+            !$loggedInUser->hasRole('POS') &&
+            !$loggedInUser->hasRole('Scanner') &&
+            !$loggedInUser->hasRole('Sponsor') &&
+            !$loggedInUser->hasRole('Agent')
         ) {
             return response()->json([
                 'status' => false,
@@ -1418,19 +1419,19 @@ class DashboardController extends Controller
                     // For POS, sum the quantity field
                     $q->withSum([
                         $bookingRelation => function ($query) use ($startDate, $endDate) {
-                        if ($startDate && $endDate) {
-                            $query->whereBetween('created_at', [$startDate, $endDate]);
+                            if ($startDate && $endDate) {
+                                $query->whereBetween('created_at', [$startDate, $endDate]);
+                            }
                         }
-                    }
                     ], 'quantity');
                 } else {
                     // For others, count the records
                     $q->withCount([
                         $bookingRelation => function ($query) use ($startDate, $endDate) {
-                        if ($startDate && $endDate) {
-                            $query->whereBetween('created_at', [$startDate, $endDate]);
+                            if ($startDate && $endDate) {
+                                $query->whereBetween('created_at', [$startDate, $endDate]);
+                            }
                         }
-                    }
                     ]);
                 }
             }
@@ -1717,12 +1718,13 @@ class DashboardController extends Controller
         $isOrganizer = $loggedInUser->hasRole('Organizer');
 
         // Check authorization
-        if (!$isAdmin && 
-        !$loggedInUser->hasRole('Organizer') && 
-        !$loggedInUser->hasRole('POS') && 
-        !$loggedInUser->hasRole('Scanner') &&
-        !$loggedInUser->hasRole('Sponsor') &&
-        !$loggedInUser->hasRole('Agent')
+        if (
+            !$isAdmin &&
+            !$loggedInUser->hasRole('Organizer') &&
+            !$loggedInUser->hasRole('POS') &&
+            !$loggedInUser->hasRole('Scanner') &&
+            !$loggedInUser->hasRole('Sponsor') &&
+            !$loggedInUser->hasRole('Agent')
         ) {
             return response()->json([
                 'status' => false,
@@ -1901,4 +1903,108 @@ class DashboardController extends Controller
     }
 
 
+    public function organizerTotals()
+    {
+        try {
+            $today = now()->toDateString();
+            $yesterday = now()->subDay()->toDateString();
+
+            // Get all organizers (users with role Organizer)
+            $organizers = User::role('Organizer')->select('id', 'name','organisation')->get();
+
+            $response = [];
+
+            foreach ($organizers as $org) {
+                $organizerId = $org->id;
+
+                // Today Online (Booking Only)
+                $todayOnline = Booking::whereHas('ticket.event', function ($q) use ($organizerId) {
+                    $q->where('user_id', $organizerId);
+                })
+                    ->whereDate('created_at', $today)
+                    ->sum('amount');
+
+                // Today Offline (Booking with agent)
+                $todayOfflineBooking = Agent::whereHas('ticket.event', function ($q) use ($organizerId) {
+                    $q->where('user_id', $organizerId);
+                })
+                    ->whereDate('created_at', $today)
+                    ->sum('amount');
+
+                // Today Offline (POS Booking)
+                $todayOfflinePOS = PosBooking::whereHas('ticket.event', function ($q) use ($organizerId) {
+                    $q->where('user_id', $organizerId);
+                })
+                    ->whereDate('created_at', $today)
+                    ->sum('amount');
+
+                // Yesterday Online
+                $yesterdayOnline = Booking::whereHas('ticket.event', function ($q) use ($organizerId) {
+                    $q->where('user_id', $organizerId);
+                })
+                    ->whereDate('created_at', $yesterday)
+                    ->sum('amount');
+
+                // Yesterday Offline Booking
+                $yesterdayOfflineBooking = Agent::whereHas('ticket.event', function ($q) use ($organizerId) {
+                    $q->where('user_id', $organizerId);
+                })
+                    ->whereDate('created_at', $yesterday)
+                    ->sum('amount');
+
+                // Yesterday Offline POS
+                $yesterdayOfflinePOS = PosBooking::whereHas('ticket.event', function ($q) use ($organizerId) {
+                    $q->where('user_id', $organizerId);
+                })
+                    ->whereDate('created_at', $yesterday)
+                    ->sum('amount');
+
+                // Overall Total (Bookings + POS)
+                $overallBooking = Booking::whereHas('ticket.event', function ($q) use ($organizerId) {
+                    $q->where('user_id', $organizerId);
+                })
+                    ->sum('amount');
+
+                $overallAgentBooking = Agent::whereHas('ticket.event', function ($q) use ($organizerId) {
+                    $q->where('user_id', $organizerId);
+                })
+                    ->sum('amount');
+
+                $overallPOS = PosBooking::whereHas('ticket.event', function ($q) use ($organizerId) {
+                    $q->where('user_id', $organizerId);
+                })
+                    ->sum('amount');
+
+                $response[] = [
+                    'organizer_id'   => $organizerId,
+                    'organizer_name' => $org->name,
+                    'organisation' => $org->organisation,
+
+                    'today' => [
+                        'online'  => $todayOnline,
+                        'offline' => $todayOfflineBooking + $todayOfflinePOS,
+                    ],
+
+                    'yesterday' => [
+                        'online'  => $yesterdayOnline,
+                        'offline' => $yesterdayOfflineBooking + $yesterdayOfflinePOS,
+                    ],
+
+                    'online_overall_total' => $overallBooking + $overallPOS,
+                    'offline_overall_total' => $overallAgentBooking + $overallPOS,
+                    'overall_total' => $overallBooking + $overallAgentBooking + $overallPOS,
+                ];
+            }
+
+            return response()->json([
+                'status' => true,
+                'data' => $response
+            ]);
+        } catch (\Exception $e) {
+            return response()->json([
+                'status' => false,
+                'message' => $e->getMessage()
+            ]);
+        }
+    }
 }

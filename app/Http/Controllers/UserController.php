@@ -138,14 +138,14 @@ class UserController extends Controller
         // }
         if ($loggedInUser->hasRole('Admin')) {
             // Admin → all users
-            $query = User::with(['roles', 'reportingUser']);
+            $query = User::with(['roles', 'reportingUser', 'latestLoginHistory']);
         } elseif ($loggedInUser->hasRole('Organizer')) {
             // Organizer → only their sub-users
-            $query = User::with(['roles', 'reportingUser'])
+            $query = User::with(['roles', 'reportingUser', 'latestLoginHistory'])
                 ->where('reporting_user', $loggedInUser->id);
         } else {
             // Other roles → only self
-            $query = User::with(['roles', 'reportingUser'])
+            $query = User::with(['roles', 'reportingUser', 'latestLoginHistory'])
                 ->where('id', $loggedInUser->id);
         }
 
@@ -161,6 +161,7 @@ class UserController extends Controller
         $canViewEmail = $permissions['View Email'];
 
         $allUsers = $users->map(function ($user) use ($canViewContact, $canViewEmail) {
+            $login = $user->latestLoginHistory;
             return [
                 'id' => $user->id,
                 'name' => $user->name,
@@ -172,6 +173,11 @@ class UserController extends Controller
                 'organisation' => $user->organisation,
                 'created_at' => $user->created_at,
                 'authentication' => $user->authentication,
+
+                'ip_address' => $login->ip_address ?? null,
+                'city'       => $login->city ?? null,
+                'state'      => $login->state ?? null,
+                'last_login' => $login->created_at ?? null,
             ];
         });
 
@@ -1527,13 +1533,13 @@ class UserController extends Controller
     // }
 
     //    public function viewAgreement($id)
-//     {
-//         $user = User::findOrFail($id);
+    //     {
+    //         $user = User::findOrFail($id);
 
     //         $data = $this->prepareAgreementData($user);
 
     //         return view('agreements.org-agreement', $data);
-//     }
+    //     }
 
     public function downloadAgreement($id)
     {
@@ -1545,7 +1551,6 @@ class UserController extends Controller
             ->setPaper('a4');
 
         return $pdf->download("Organizer_Agreement_{$user->id}.pdf");
-
     }
 
     private function prepareAgreementData($user)
