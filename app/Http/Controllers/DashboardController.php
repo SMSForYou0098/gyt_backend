@@ -1902,83 +1902,179 @@ class DashboardController extends Controller
         ];
     }
 
+    // Organizer Totals all
+    // public function organizerTotals()
+    // {
+    //     try {
+    //         $today = now()->toDateString();
+    //         $yesterday = now()->subDay()->toDateString();
 
-    public function organizerTotals()
+    //         // Get all organizers (users with role Organizer)
+    //         $organizers = User::role('Organizer')->select('id', 'name','organisation')->get();
+
+    //         $response = [];
+
+    //         foreach ($organizers as $org) {
+    //             $organizerId = $org->id;
+
+    //             // Today Online (Booking Only)
+    //             $todayOnline = Booking::whereHas('ticket.event', function ($q) use ($organizerId) {
+    //                 $q->where('user_id', $organizerId);
+    //             })
+    //                 ->whereDate('created_at', $today)
+    //                 ->sum('amount');
+
+    //             // Today Offline (Booking with agent)
+    //             $todayOfflineBooking = Agent::whereHas('ticket.event', function ($q) use ($organizerId) {
+    //                 $q->where('user_id', $organizerId);
+    //             })
+    //                 ->whereDate('created_at', $today)
+    //                 ->sum('amount');
+
+    //             // Today Offline (POS Booking)
+    //             $todayOfflinePOS = PosBooking::whereHas('ticket.event', function ($q) use ($organizerId) {
+    //                 $q->where('user_id', $organizerId);
+    //             })
+    //                 ->whereDate('created_at', $today)
+    //                 ->sum('amount');
+
+    //             // Yesterday Online
+    //             $yesterdayOnline = Booking::whereHas('ticket.event', function ($q) use ($organizerId) {
+    //                 $q->where('user_id', $organizerId);
+    //             })
+    //                 ->whereDate('created_at', $yesterday)
+    //                 ->sum('amount');
+
+    //             // Yesterday Offline Booking
+    //             $yesterdayOfflineBooking = Agent::whereHas('ticket.event', function ($q) use ($organizerId) {
+    //                 $q->where('user_id', $organizerId);
+    //             })
+    //                 ->whereDate('created_at', $yesterday)
+    //                 ->sum('amount');
+
+    //             // Yesterday Offline POS
+    //             $yesterdayOfflinePOS = PosBooking::whereHas('ticket.event', function ($q) use ($organizerId) {
+    //                 $q->where('user_id', $organizerId);
+    //             })
+    //                 ->whereDate('created_at', $yesterday)
+    //                 ->sum('amount');
+
+    //             // Overall Total (Bookings + POS)
+    //             $overallBooking = Booking::whereHas('ticket.event', function ($q) use ($organizerId) {
+    //                 $q->where('user_id', $organizerId);
+    //             })
+    //                 ->sum('amount');
+
+    //             $overallAgentBooking = Agent::whereHas('ticket.event', function ($q) use ($organizerId) {
+    //                 $q->where('user_id', $organizerId);
+    //             })
+    //                 ->sum('amount');
+
+    //             $overallPOS = PosBooking::whereHas('ticket.event', function ($q) use ($organizerId) {
+    //                 $q->where('user_id', $organizerId);
+    //             })
+    //                 ->sum('amount');
+
+    //             $response[] = [
+    //                 'organizer_id'   => $organizerId,
+    //                 'organizer_name' => $org->name,
+    //                 'organisation' => $org->organisation,
+
+    //                 'today' => [
+    //                     'online'  => $todayOnline,
+    //                     'offline' => $todayOfflineBooking + $todayOfflinePOS,
+    //                 ],
+
+    //                 'yesterday' => [
+    //                     'online'  => $yesterdayOnline,
+    //                     'offline' => $yesterdayOfflineBooking + $yesterdayOfflinePOS,
+    //                 ],
+
+    //                 'online_overall_total' => $overallBooking + $overallPOS,
+    //                 'offline_overall_total' => $overallAgentBooking + $overallPOS,
+    //                 'overall_total' => $overallBooking + $overallAgentBooking + $overallPOS,
+    //             ];
+    //         }
+
+    //         return response()->json([
+    //             'status' => true,
+    //             'data' => $response
+    //         ]);
+    //     } catch (\Exception $e) {
+    //         return response()->json([
+    //             'status' => false,
+    //             'message' => $e->getMessage()
+    //         ]);
+    //     }
+    // }
+
+    // aective organizer totals
+
+        public function organizerTotals()
     {
         try {
             $today = now()->toDateString();
             $yesterday = now()->subDay()->toDateString();
 
-            // Get all organizers (users with role Organizer)
-            $organizers = User::role('Organizer')->select('id', 'name','organisation')->get();
+            // ✔ Only those organizers who have at least 1 active event
+            $organizers = User::role('Organizer')
+                ->whereHas('events', function ($q) {
+                    $q->where('status', '1');
+                })
+                ->select('id', 'name', 'organisation')
+                ->get();
 
             $response = [];
 
             foreach ($organizers as $org) {
+
                 $organizerId = $org->id;
 
-                // Today Online (Booking Only)
-                $todayOnline = Booking::whereHas('ticket.event', function ($q) use ($organizerId) {
-                    $q->where('user_id', $organizerId);
-                })
+                // Helper closure for event filtering
+                $eventFilter = function ($q) use ($organizerId) {
+                    $q->where('user_id', $organizerId)
+                        ->where('status', '1'); // ✔ Only Active Events
+                };
+
+                // Today Online
+                $todayOnline = Booking::whereHas('ticket.event', $eventFilter)
                     ->whereDate('created_at', $today)
                     ->sum('amount');
 
-                // Today Offline (Booking with agent)
-                $todayOfflineBooking = Agent::whereHas('ticket.event', function ($q) use ($organizerId) {
-                    $q->where('user_id', $organizerId);
-                })
+                // Today Offline (Agent)
+                $todayOfflineBooking = Agent::whereHas('ticket.event', $eventFilter)
                     ->whereDate('created_at', $today)
                     ->sum('amount');
 
-                // Today Offline (POS Booking)
-                $todayOfflinePOS = PosBooking::whereHas('ticket.event', function ($q) use ($organizerId) {
-                    $q->where('user_id', $organizerId);
-                })
+                // Today Offline (POS)
+                $todayOfflinePOS = PosBooking::whereHas('ticket.event', $eventFilter)
                     ->whereDate('created_at', $today)
                     ->sum('amount');
 
                 // Yesterday Online
-                $yesterdayOnline = Booking::whereHas('ticket.event', function ($q) use ($organizerId) {
-                    $q->where('user_id', $organizerId);
-                })
+                $yesterdayOnline = Booking::whereHas('ticket.event', $eventFilter)
                     ->whereDate('created_at', $yesterday)
                     ->sum('amount');
 
                 // Yesterday Offline Booking
-                $yesterdayOfflineBooking = Agent::whereHas('ticket.event', function ($q) use ($organizerId) {
-                    $q->where('user_id', $organizerId);
-                })
+                $yesterdayOfflineBooking = Agent::whereHas('ticket.event', $eventFilter)
                     ->whereDate('created_at', $yesterday)
                     ->sum('amount');
 
                 // Yesterday Offline POS
-                $yesterdayOfflinePOS = PosBooking::whereHas('ticket.event', function ($q) use ($organizerId) {
-                    $q->where('user_id', $organizerId);
-                })
+                $yesterdayOfflinePOS = PosBooking::whereHas('ticket.event', $eventFilter)
                     ->whereDate('created_at', $yesterday)
                     ->sum('amount');
 
-                // Overall Total (Bookings + POS)
-                $overallBooking = Booking::whereHas('ticket.event', function ($q) use ($organizerId) {
-                    $q->where('user_id', $organizerId);
-                })
-                    ->sum('amount');
-
-                $overallAgentBooking = Agent::whereHas('ticket.event', function ($q) use ($organizerId) {
-                    $q->where('user_id', $organizerId);
-                })
-                    ->sum('amount');
-
-                $overallPOS = PosBooking::whereHas('ticket.event', function ($q) use ($organizerId) {
-                    $q->where('user_id', $organizerId);
-                })
-                    ->sum('amount');
+                // Overall totals
+                $overallOnline = Booking::whereHas('ticket.event', $eventFilter)->sum('amount');
+                $overallAgent  = Agent::whereHas('ticket.event', $eventFilter)->sum('amount');
+                $overallPOS    = PosBooking::whereHas('ticket.event', $eventFilter)->sum('amount');
 
                 $response[] = [
                     'organizer_id'   => $organizerId,
                     'organizer_name' => $org->name,
-                    'organisation' => $org->organisation,
+                    'organisation'   => $org->organisation,
 
                     'today' => [
                         'online'  => $todayOnline,
@@ -1990,9 +2086,9 @@ class DashboardController extends Controller
                         'offline' => $yesterdayOfflineBooking + $yesterdayOfflinePOS,
                     ],
 
-                    'online_overall_total' => $overallBooking + $overallPOS,
-                    'offline_overall_total' => $overallAgentBooking + $overallPOS,
-                    'overall_total' => $overallBooking + $overallAgentBooking + $overallPOS,
+                    'online_overall_total'  => $overallOnline + $overallPOS,
+                    'offline_overall_total' => $overallAgent + $overallPOS,
+                    'overall_total'         => $overallOnline + $overallAgent + $overallPOS,
                 ];
             }
 
