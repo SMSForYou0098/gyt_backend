@@ -151,6 +151,7 @@ Route::middleware(['restrict.ip'])->group(function () {
         Route::get('/calculateSale/{id}', [DashboardController::class, 'calculateSale']);
         Route::get('org/dashbord', [DashboardController::class, 'organizerWeeklyReport']);
         Route::get('/getDashboardSummary/{type}', [DashboardController::class, 'getDashboardSummary']);
+        Route::get('/getDashboardOrgTicket', [DashboardController::class, 'getDashboardOrgTicket']);
         Route::get('organizer/summary', [DashboardController::class, 'organizerTotals']);
         Route::get('/payment-log', [DashboardController::class, 'getPaymentLog']);
         Route::delete('/flush-payment-log', [DashboardController::class, 'PaymentLogDelet']);

@@ -44,6 +44,8 @@ class ReportController extends Controller
 
 
         $eventType = $request->type;
+        $user = auth()->user();
+
 
         $eventsQuery = Event::with([
             'tickets.bookings' => function ($query) use ($startDate, $endDate) {
@@ -70,6 +72,9 @@ class ReportController extends Controller
             'user'
         ]);
 
+        if ($user->hasRole('Organizer')) {
+            $eventsQuery->where('user_id', $user->id);
+        }
         $today = Carbon::today()->toDateString();
         if ($eventType == 'all') {
             $events = $eventsQuery->get(['id', 'name as event_name', 'user_id']);
@@ -1838,25 +1843,25 @@ class ReportController extends Controller
     //     ], 200);
     // }
 
-   
+
     public function organizerEventsReport(Request $request)
     {
         // Validate organizer_id is provided
         $request->validate([
             'organizer_id' => 'required|exists:users,id'
         ]);
-    
+
         // Get request parameters
         $search = $request->input('search');
         $sort = $request->input('sort', 'created_at');
         $order = $request->input('order', 'desc');
         $perPage = $request->input('per_page', 5);
         $dateRange = $request->input('date');
-    
+
         // Parse date range
         $startDate = null;
         $endDate = null;
-    
+
         if ($dateRange) {
             $dates = explode(',', $dateRange);
             try {
@@ -1873,10 +1878,10 @@ class ReportController extends Controller
                 return response()->json(['status' => false, 'message' => 'Invalid date value'], 400);
             }
         }
-    
+
         // Get the organizer
         $organizer = User::with('roles')->findOrFail($request->organizer_id);
-    
+
         // Verify user has permission
         $loggedInUser = Auth::user();
         if (!$loggedInUser->hasRole('Admin')) {
@@ -1885,51 +1890,51 @@ class ReportController extends Controller
                 return response()->json(['status' => false, 'message' => 'Unauthorized'], 403);
             }
         }
-    
+
         // Build events query
         $eventsQuery = $organizer->events();
-    
+
         if ($search) {
             $eventsQuery->where('name', 'like', "%{$search}%");
         }
-    
+
         if ($startDate && $endDate) {
             $eventsQuery->whereBetween('created_at', [$startDate, $endDate]);
         }
-    
+
         // Apply sorting
         $validSortColumns = ['name', 'created_at', 'start_date', 'end_date'];
         $sort = in_array($sort, $validSortColumns) ? $sort : 'created_at';
         $order = in_array(strtolower($order), ['asc', 'desc']) ? $order : 'desc';
-    
+
         $eventsQuery->orderBy($sort, $order);
-    
+
         // Paginate the results
         $events = $eventsQuery->paginate($perPage);
-    
+
         // Transform the events with detailed reporting data
         $transformedEvents = $events->getCollection()->map(function ($event) use ($startDate, $endDate, $organizer) {
             $ticketIds = $event->tickets->pluck('id')->toArray();
-    
+
             $filterBetween = function ($query) use ($startDate, $endDate) {
                 if ($startDate && $endDate) {
                     return $query->whereBetween('created_at', [$startDate, $endDate]);
                 }
                 return $query;
             };
-    
+
             // Get all bookings by type
             $onlineBookings = $filterBetween(Booking::whereIn('ticket_id', $ticketIds))->get();
             $agentBookings = $filterBetween(Agent::whereIn('ticket_id', $ticketIds))->get();
             $posBookings = $filterBetween(PosBooking::whereIn('ticket_id', $ticketIds))->get();
             $sponsorBookings = $filterBetween(SponsorBooking::whereIn('ticket_id', $ticketIds))->get();
             $corporateBookings = $filterBetween(CorporateBooking::whereIn('ticket_id', $ticketIds))->get();
-    
+
             // Process agents
             $agents = $agentBookings->groupBy('user_id')->map(function ($bookings, $userId) {
                 $user = $bookings->first()->user;
                 $paymentMethods = $bookings->groupBy('payment_method')->map->count();
-                
+
                 return [
                     'type' => 'agent',
                     'name' => $user->name,
@@ -1945,12 +1950,12 @@ class ReportController extends Controller
                     'payment_methods' => $paymentMethods
                 ];
             })->values();
-    
+
             // Process POS
             $pos = $posBookings->groupBy('user_id')->map(function ($bookings, $userId) {
                 $user = $bookings->first()->user;
                 $paymentMethods = $bookings->groupBy('payment_method')->map->count();
-                
+
                 return [
                     'type' => 'pos',
                     'name' => $user->name,
@@ -1966,12 +1971,12 @@ class ReportController extends Controller
                     'payment_methods' => $paymentMethods
                 ];
             })->values();
-    
+
             // Process sponsors
             $sponsors = $sponsorBookings->groupBy('user_id')->map(function ($bookings, $userId) {
                 $user = $bookings->first()->user;
                 $paymentMethods = $bookings->groupBy('payment_method')->map->count();
-                
+
                 return [
                     'type' => 'sponsor',
                     'name' => $user->name,
@@ -1987,12 +1992,12 @@ class ReportController extends Controller
                     'payment_methods' => $paymentMethods
                 ];
             })->values();
-    
+
             // Process corporate
             $corporate = $corporateBookings->groupBy('user_id')->map(function ($bookings, $userId) {
                 $user = $bookings->first()->user;
                 $paymentMethods = $bookings->groupBy('payment_method')->map->count();
-                
+
                 return [
                     'type' => 'corporate',
                     'name' => $user->name,
@@ -2008,14 +2013,14 @@ class ReportController extends Controller
                     'payment_methods' => $paymentMethods
                 ];
             })->values();
-    
+
             // Combine all booking sources
             $bookingSources = collect()
                 ->merge($agents)
                 ->merge($pos)
                 ->merge($sponsors)
                 ->merge($corporate);
-    
+
             // Payment stats calculation
             $paymentMethods = ['Cash', 'UPI', 'Card', 'Net Banking', 'Other'];
             $sources = [
@@ -2025,29 +2030,29 @@ class ReportController extends Controller
                 'sponsor' => $sponsorBookings,
                 'corporate' => $corporateBookings
             ];
-    
+
             $paymentAmounts = [];
             $paymentCounts = [];
             $totalDiscount = 0;
             $totalBooked = 0;
-    
+
             foreach ($sources as $source => $bookings) {
                 $paymentAmounts[$source] = array_fill_keys($paymentMethods, 0);
                 $paymentCounts[$source] = array_fill_keys($paymentMethods, 0);
-    
+
                 foreach ($bookings as $booking) {
                     $method = $booking->payment_method ?? 'Other';
                     $method = in_array($method, $paymentMethods) ? $method : 'Other';
                     $amount = $booking->amount ?? 0;
                     $discount = $booking->discount ?? 0;
-    
+
                     $paymentAmounts[$source][$method] += $amount;
                     $paymentCounts[$source][$method]++;
                     $totalDiscount += $discount;
                     $totalBooked++;
                 }
             }
-    
+
             return [
                 'id' => $event->id,
                 'name' => $event->name,
@@ -2077,7 +2082,7 @@ class ReportController extends Controller
                 ]
             ];
         });
-    
+
         return response()->json([
             'status' => true,
             'message' => 'Organizer events fetched successfully',
@@ -2098,5 +2103,4 @@ class ReportController extends Controller
             ]
         ], 200);
     }
-
 }
