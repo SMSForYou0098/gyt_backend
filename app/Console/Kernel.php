@@ -25,6 +25,8 @@ class Kernel extends ConsoleKernel
         $schedule->command('logs:clear')->daily();
         $schedule->command('app:close-expired-sales')->dailyAt('00:00');
         $schedule->command('tickets:check-soldout')->everyFiveMinutes();
+       $schedule->command('events:close-expired')->dailyAt('03:00');
+
     }
 
     /**

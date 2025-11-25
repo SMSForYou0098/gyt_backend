@@ -2204,7 +2204,8 @@ class DashboardController extends Controller
         $yesterdayStart = Carbon::yesterday()->startOfDay();
         $yesterdayEnd   = Carbon::yesterday()->endOfDay();
 
-        $query = Event::query();
+        $query = Event::where('status', 1);
+
 
         if ($isOrganizer) {
             $query->where('user_id', $loggedInUser->id);
