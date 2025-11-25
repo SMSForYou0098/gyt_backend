@@ -18,7 +18,7 @@ class CloseExpiredEvents extends Command
         $today = Carbon::today()->format('Y-m-d');
 
         $events = Event::where('status', 1)->get(); // only active events
-        Log::info('Active events count: ' . $events->count());
+      // Log::info('Active events count: ' . $events->count());
 
         foreach ($events as $event) {
 
@@ -26,14 +26,14 @@ class CloseExpiredEvents extends Command
             $dates = explode(',', $event->date_range);
             $endDate = trim(end($dates)); // always get last date
 
-            Log::info("Checking event ID: {$event->id} | End Date: {$endDate} | Today: {$today}");
+           // Log::info("Checking event ID: {$event->id} | End Date: {$endDate} | Today: {$today}");
 
             if ($today >= $endDate) {
 
                 $event->update(['status' => 0]);
                 Ticket::where('event_id', $event->id)->update(['status' => 0]);
 
-                Log::info("Expired → Event ID {$event->id} closed & tickets closed");
+                //Log::info("Expired → Event ID {$event->id} closed & tickets closed");
             }
         }
 
