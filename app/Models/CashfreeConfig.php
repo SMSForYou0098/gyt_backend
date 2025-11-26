@@ -10,7 +10,7 @@ class CashfreeConfig extends Model
     use HasFactory;
     protected $fillable = [
         'user_id',
-        'app_id',
+        'app_id','status',
         'secret_key',
         'env'
     ];
