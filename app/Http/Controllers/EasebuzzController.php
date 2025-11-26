@@ -1055,13 +1055,28 @@ class EasebuzzController extends Controller
     private function bookingData($data, $paymentId)
     {
 
-        $exists = Booking::where('payment_id', $paymentId)
-            ->orWhere('session_id', $data->session_id)
-            ->orWhere('token', $data->token)
-            ->first();
+        // Build query more safely
+        $query = Booking::query();
+
+        if ($paymentId) {
+            $query->where('payment_id', $paymentId);
+        }
+
+        if (!empty($data->session_id) || !empty($data->token)) {
+            $query->where(function ($q) use ($data) {
+                if (!empty($data->session_id)) {
+                    $q->orWhere('session_id', $data->session_id);
+                }
+                if (!empty($data->token)) {
+                    $q->orWhere('token', $data->token);
+                }
+            });
+        }
+
+        $exists = $query->first();
 
         if ($exists) {
-            return false; // Prevent duplicate insert
+            return false;
         }
         $booking = new Booking();
         $booking->ticket_id = $data->ticket_id;
@@ -1680,6 +1695,10 @@ class EasebuzzController extends Controller
     private function updateMasterBooking($bookingMaster, $ids, $paymentId)
     {
 
+        // Safety check - minimal change
+        if ($bookingMaster->isEmpty()) {
+            return false;
+        }
         $exists = MasterBooking::Where('session_id', $bookingMaster->first()->session_id)
             ->orWhere('order_id', $bookingMaster->first()->order_id)
             ->first();
