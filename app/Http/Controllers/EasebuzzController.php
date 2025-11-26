@@ -66,21 +66,21 @@ class EasebuzzController extends Controller
 
             $getSession = $this->generateEncryptedSessionId();
             $session = $getSession['original'];
-            
-          //  $adminConfig = EasebuzzConfig::where('user_id', User::role('Admin')->value('id'))->first();
-			
-                       $config = EasebuzzConfig::where('user_id', $request->organizer_id)
+
+            //  $adminConfig = EasebuzzConfig::where('user_id', User::role('Admin')->value('id'))->first();
+
+            $config = EasebuzzConfig::where('user_id', $request->organizer_id)
                 ->first();
 
             if (! $config) {
                 $adminId = User::role('Admin')->value('id');
-                 $config = EasebuzzConfig::where('user_id', $adminId)->first();
+                $config = EasebuzzConfig::where('user_id', $adminId)->first();
             }
 
             // $config = EasebuzzConfig::where('user_id', $request->organizer_id)->firstOrFail();
             // $adminConfig = EasebuzzConfig::where('user_id', User::role('Admin')->value('id'))->first();
 
-            
+
             $env = $config->env;
             $key = $config->merchant_key;
             $salt = $config->salt;
@@ -165,14 +165,14 @@ class EasebuzzController extends Controller
     public function handlePaymentResponse(Request $request, $gateway, $id, $session_id)
     {
         try {
-         
+
 
             //$decryptedSessionId = decrypt($session_id);
             $status = $request->input('status');
             $category = $params['category'] ?? null;
             //return  redirect()->away('http://192.168.0.144:3000/events/' . $id . '/process?status=' . $status . '&session_id=' . $session_id . '&category=' . $category);
             //return redirect()->away('https://ssgarba.com/events/' . $id . '/process?status=' . $status . '&session_id=' . $session_id . '&category=' . $category);
-             return  redirect()->away('https://getyourticket.in/events/' . $id . '/process?status=' . $status . '&session_id=' . $session_id . '&category=' . $category);
+            return  redirect()->away('https://getyourticket.in/events/' . $id . '/process?status=' . $status . '&session_id=' . $session_id . '&category=' . $category);
         } catch (\Exception $e) {
             Log::error('Payment Response Error', ['gateway' => $gateway, 'error' => $e->getMessage()]);
             return response()->json(['status' => false, 'message' => $e->getMessage()], 500);
@@ -407,88 +407,87 @@ class EasebuzzController extends Controller
     //         throw $e;
     //     }
     // }
-   private function extractRazorpayWebhookData($request)
-{
-    try {
-        $params = $request->all();
+    private function extractRazorpayWebhookData($request)
+    {
+        try {
+            $params = $request->all();
 
-        if (!isset($params['event']) || !isset($params['payload'])) {
-            throw new \Exception('Invalid Razorpay webhook structure');
+            if (!isset($params['event']) || !isset($params['payload'])) {
+                throw new \Exception('Invalid Razorpay webhook structure');
+            }
+
+            $event = $params['event'];
+            $payload = $params['payload'];
+
+            $paymentId = null;
+            $orderId = null;
+            $amount = null;
+            $status = null;
+            $method = 'razorpay';
+            $sessionId = null;
+            $category = null;
+
+            if ($event === 'payment.captured') {
+                // ✅ Handle normal checkout flow
+                $payment = $payload['payment']['entity'] ?? null;
+                if (!$payment) {
+                    throw new \Exception('Missing payment entity in webhook payload');
+                }
+
+                $paymentId = $payment['id'] ?? null;
+                $orderId = $payment['order_id'] ?? null;
+                $amount = ($payment['amount'] ?? 0) / 100;
+                $status = $payment['status'] ?? null;
+                $method = $payment['method'] ?? 'razorpay';
+
+                // session & category order notes માંથી લાવી શકાય
+                $notes = $payment['notes'] ?? [];
+                $sessionId = $notes['session_id'] ?? null;
+                $category  = $notes['category'] ?? null;
+            } elseif ($event === 'payment_link.paid') {
+                // ✅ Handle payment link flow (if used)
+                $paymentLink = $payload['payment_link']['entity'] ?? null;
+                $payment = $payload['payment']['entity'] ?? null;
+
+                if (!$paymentLink || !$payment) {
+                    throw new \Exception('Missing payment_link or payment entity');
+                }
+
+                $paymentId = $payment['id'] ?? null;
+                $orderId = $payment['order_id'] ?? null;
+                $amount = ($payment['amount'] ?? 0) / 100;
+                $status = $payment['status'] ?? null;
+                $method = $payment['method'] ?? 'razorpay';
+
+                $callbackUrl = $paymentLink['callback_url'] ?? null;
+                if ($callbackUrl) {
+                    $sessionId = $this->extractSessionFromCallbackUrl($callbackUrl);
+                    $category = $this->extractCategoryFromCallbackUrl($callbackUrl);
+                }
+            } else {
+                Log::info("Razorpay webhook event '{$event}' ignored");
+                throw new \Exception("Event '{$event}' not supported");
+            }
+
+            // ✅ Booking status
+            $bookingStatus = ($status === 'captured') ? 'success' : 'failed';
+
+            return [
+                'payment_id' => $paymentId,
+                'session_id' => $sessionId,
+                'category'   => $category,
+                'status'     => $bookingStatus,
+                'amount'     => $amount,
+                'method'     => $method,
+                'order_id'   => $orderId,
+                'event'      => $event,
+                'raw_payload' => $params
+            ];
+        } catch (\Exception $e) {
+            Log::error('Razorpay webhook data extraction failed: ' . $e->getMessage());
+            throw $e;
         }
-
-        $event = $params['event'];
-        $payload = $params['payload'];
-
-        $paymentId = null;
-        $orderId = null;
-        $amount = null;
-        $status = null;
-        $method = 'razorpay';
-        $sessionId = null;
-        $category = null;
-
-        if ($event === 'payment.captured') {
-            // ✅ Handle normal checkout flow
-            $payment = $payload['payment']['entity'] ?? null;
-            if (!$payment) {
-                throw new \Exception('Missing payment entity in webhook payload');
-            }
-
-            $paymentId = $payment['id'] ?? null;
-            $orderId = $payment['order_id'] ?? null;
-            $amount = ($payment['amount'] ?? 0) / 100;
-            $status = $payment['status'] ?? null;
-            $method = $payment['method'] ?? 'razorpay';
-
-            // session & category order notes માંથી લાવી શકાય
-            $notes = $payment['notes'] ?? [];
-            $sessionId = $notes['session_id'] ?? null;
-            $category  = $notes['category'] ?? null;
-
-        } elseif ($event === 'payment_link.paid') {
-            // ✅ Handle payment link flow (if used)
-            $paymentLink = $payload['payment_link']['entity'] ?? null;
-            $payment = $payload['payment']['entity'] ?? null;
-
-            if (!$paymentLink || !$payment) {
-                throw new \Exception('Missing payment_link or payment entity');
-            }
-
-            $paymentId = $payment['id'] ?? null;
-            $orderId = $payment['order_id'] ?? null;
-            $amount = ($payment['amount'] ?? 0) / 100;
-            $status = $payment['status'] ?? null;
-            $method = $payment['method'] ?? 'razorpay';
-
-            $callbackUrl = $paymentLink['callback_url'] ?? null;
-            if ($callbackUrl) {
-                $sessionId = $this->extractSessionFromCallbackUrl($callbackUrl);
-                $category = $this->extractCategoryFromCallbackUrl($callbackUrl);
-            }
-        } else {
-            Log::info("Razorpay webhook event '{$event}' ignored");
-            throw new \Exception("Event '{$event}' not supported");
-        }
-
-        // ✅ Booking status
-        $bookingStatus = ($status === 'captured') ? 'success' : 'failed';
-
-        return [
-            'payment_id' => $paymentId,
-            'session_id' => $sessionId,
-            'category'   => $category,
-            'status'     => $bookingStatus,
-            'amount'     => $amount,
-            'method'     => $method,
-            'order_id'   => $orderId,
-            'event'      => $event,
-            'raw_payload'=> $params
-        ];
-    } catch (\Exception $e) {
-        Log::error('Razorpay webhook data extraction failed: ' . $e->getMessage());
-        throw $e;
     }
-}
     // Helper method to extract session ID from Razorpay callback URL
     private function extractSessionFromCallbackUrl($callbackUrl)
     {
@@ -582,16 +581,16 @@ class EasebuzzController extends Controller
     // Update the main handleWebhook method
     public function handleWebhook(Request $request, $gateway)
     {
-   // $response = Http::post("https://dark.getyourticket.in/api/dark/payment-webhook/{$gateway}/vod", $request->all());
-    //$response = Http::post("https://dark.getyourticket.in/api/dark/payment-webhook/{$gateway}/vod", $request->all());
+        // $response = Http::post("https://dark.getyourticket.in/api/dark/payment-webhook/{$gateway}/vod", $request->all());
+        //$response = Http::post("https://dark.getyourticket.in/api/dark/payment-webhook/{$gateway}/vod", $request->all());
 
-//     return response()->json([
-//         'status' => $response->successful(),
-//         'message' => 'Webhook forwarded',
-//         'response' => $response->json(),
-//     ]);
-      
-       // Log::info("[$gateway] Webhook received:", $request->all());
+        //     return response()->json([
+        //         'status' => $response->successful(),
+        //         'message' => 'Webhook forwarded',
+        //         'response' => $response->json(),
+        //     ]);
+
+        // Log::info("[$gateway] Webhook received:", $request->all());
 
         try {
             $params = $request->all();
@@ -673,8 +672,7 @@ class EasebuzzController extends Controller
                     Log::error("[$gateway] Parameter processing failed: " . $e->getMessage());
                     return response()->json(['error' => 'Invalid parameters'], 400);
                 }
-            }
-			elseif ($gateway === 'cashfree') {
+            } elseif ($gateway === 'cashfree') {
                 $webhookData = $this->extractCashfreeWebhookData(new Request($params));
                 $sessionId   = $webhookData['session_id'];
                 $category    = $webhookData['category'];
@@ -692,8 +690,8 @@ class EasebuzzController extends Controller
                 ]);
             }
             // Normalize status for non-PhonePe gateways
-           if ($gateway !== 'phonepe' || $gateway !== 'razorpay' || $gateway !== 'cashfree') {
-            //if ($gateway !== 'phonepe' && $gateway !== 'razorpay') {
+            if ($gateway !== 'phonepe' || $gateway !== 'razorpay' || $gateway !== 'cashfree') {
+                //if ($gateway !== 'phonepe' && $gateway !== 'razorpay') {
                 $successStatuses = ['success', 'credit', 'completed', 'paid'];
                 $failureStatuses = ['failed', 'failure', 'error', 'cancelled', 'declined'];
 
@@ -754,8 +752,8 @@ class EasebuzzController extends Controller
         }
     }
 
-  
-      private function extractCashfreeWebhookData($request)
+
+    private function extractCashfreeWebhookData($request)
     {
         try {
             $data = $request->all();
@@ -777,10 +775,10 @@ class EasebuzzController extends Controller
             $sessionId = $orderId;
             // }
             $pending = PenddingBooking::with('ticket.event.Category')
-            ->where('session_id', $sessionId)
-            ->first();
+                ->where('session_id', $sessionId)
+                ->first();
 
-       $category = optional($pending->ticket?->event?->Category)->title ?? 'Event';
+            $category = optional($pending->ticket?->event?->Category)->title ?? 'Event';
 
             return [
                 'payment_id'  => $paymentId,
@@ -846,8 +844,7 @@ class EasebuzzController extends Controller
                 'params' => $params,
                 'category' => $params['category'] ?? null,
             ];
-        } 
-      elseif ($gateway == 'cashfree') {
+        } elseif ($gateway == 'cashfree') {
             $paymentData = [
                 'session_id' => $sessionId ?? null,
                 'payment_id' => $params['payment_id'] ?? $params['cf_payment_id'] ?? null,
@@ -859,7 +856,7 @@ class EasebuzzController extends Controller
                 'params' => $params,
                 'category' => $params['category'] ?? null,
             ];
-        }else {
+        } else {
             throw new \Exception("Unsupported payment gateway: " . $gateway);
         }
 
@@ -1042,7 +1039,7 @@ class EasebuzzController extends Controller
                 ':T_QTY' => 1,
                 ':Ticket_Name' => $booking->ticket->name,
                 ':Event_Name' => $booking->ticket->event->name,
-               ':Event_DateTime' => $eventDateTime,
+                ':Event_DateTime' => $eventDateTime,
                 ':S_Link' => $shortLinksms,
             ]
         ];
@@ -1058,6 +1055,14 @@ class EasebuzzController extends Controller
     private function bookingData($data, $paymentId)
     {
 
+        $exists = Booking::where('payment_id', $paymentId)
+            ->orWhere('session_id', $data->session_id)
+            ->orWhere('token', $data->token)
+            ->first();
+
+        if ($exists) {
+            return false; // Prevent duplicate insert
+        }
         $booking = new Booking();
         $booking->ticket_id = $data->ticket_id;
         $booking->batch_id = Ticket::where('id', $data->ticket_id)->value('batch_id');
@@ -1230,6 +1235,21 @@ class EasebuzzController extends Controller
 
     private function transferEventBooking($decryptedSessionId, $status, $paymentId)
     {
+
+        $alreadyProcessed = Booking::where('payment_id', $paymentId)
+            ->orWhere('session_id', $decryptedSessionId)
+            ->first();
+
+        $alreadyInMaster = MasterBooking::Where('session_id', $decryptedSessionId)
+            ->first();
+
+        if ($alreadyProcessed || $alreadyInMaster) {
+            return response()->json([
+                'status' => false,
+                'msg' => 'This transaction is already processed. Duplicate booking blocked.'
+            ], 409);
+        }
+
         $bookingMaster = PenddingBookingsMaster::where('session_id', $decryptedSessionId)->with('ticket.event')->get();
         $bookings = PenddingBooking::where('session_id', $decryptedSessionId)->with('ticket.event')->get();
 
@@ -1254,7 +1274,7 @@ class EasebuzzController extends Controller
         $dateRangeFormatted = implode(' | ', $formattedDates);
 
         $eventDateTime = $dateRangeFormatted . ' | ' . $bookings[0]->ticket->event->start_time . ' - ' . $bookings[0]->ticket->event->end_time;
-       // $eventDateTime = str_replace(',', ' |', $bookings[0]->ticket->event->date_range) . ' | ' . $bookings[0]->ticket->event->start_time . ' - ' . $bookings[0]->ticket->event->end_time;
+        // $eventDateTime = str_replace(',', ' |', $bookings[0]->ticket->event->date_range) . ' | ' . $bookings[0]->ticket->event->start_time . ' - ' . $bookings[0]->ticket->event->end_time;
 
         $totalQty = count($bookings) ?? 1;
         $mediaurl = $bookings[0]->ticket->event->thumbnail;
@@ -1350,7 +1370,7 @@ class EasebuzzController extends Controller
         $dateRangeFormatted = implode(' | ', $formattedDates);
 
         $eventDateTime = $dateRangeFormatted . ' | ' . $bookings[0]->ticket->event->start_time . ' - ' . $bookings[0]->ticket->event->end_time;
-       // $eventDateTime = str_replace(',', ' |', $bookings[0]->ticket->event->date_range) . ' | ' . $bookings[0]->ticket->event->start_time . ' - ' . $bookings[0]->ticket->event->end_time;
+        // $eventDateTime = str_replace(',', ' |', $bookings[0]->ticket->event->date_range) . ' | ' . $bookings[0]->ticket->event->start_time . ' - ' . $bookings[0]->ticket->event->end_time;
 
         $totalQty = count($bookings) ?? 1;
         $mediaurl = $bookings[0]->ticket->event->thumbnail;
@@ -1377,7 +1397,7 @@ class EasebuzzController extends Controller
                 ':T_QTY' => $totalQty,
                 ':Ticket_Name' => $bookings[0]->ticket->name,
                 ':Event_Name' => $bookings[0]->ticket->event->name,
-               ':Event_DateTime' => $eventDateTime,
+                ':Event_DateTime' => $eventDateTime,
                 ':S_Link' => $shortLinksms,
             ]
         ];
@@ -1659,6 +1679,15 @@ class EasebuzzController extends Controller
 
     private function updateMasterBooking($bookingMaster, $ids, $paymentId)
     {
+
+        $exists = MasterBooking::Where('session_id', $bookingMaster->first()->session_id)
+            ->orWhere('order_id', $bookingMaster->first()->order_id)
+            ->first();
+
+        if ($exists) {
+            return false;
+        }
+
         foreach ($bookingMaster as $entry) {
             $data = [
                 'user_id' => $entry->user_id,
@@ -1754,7 +1783,7 @@ class EasebuzzController extends Controller
         $dateRangeFormatted = implode(' | ', $formattedDates);
 
         $eventDateTime = $dateRangeFormatted . ' | ' . $booking->ticket->event->start_time . ' - ' . $booking->ticket->event->end_time;
-       // $eventDateTime = str_replace(',', ' |', $booking->ticket->event->date_range) . ' | ' . $booking->ticket->event->start_time . ' - ' . $booking->ticket->event->end_time;
+        // $eventDateTime = str_replace(',', ' |', $booking->ticket->event->date_range) . ' | ' . $booking->ticket->event->start_time . ' - ' . $booking->ticket->event->end_time;
 
         $totalQty = 1;
         $mediaurl = $booking->ticket->event->thumbnail;
