@@ -14,7 +14,7 @@ class RestrictIP
      */
     protected $allowedDomains = [
         'getyourticket.in',
-            	'www.getyourticket.in','mercury-t2.phonepe.com','192.168.0.126','www.cashfree.com','api.cashfree.com','razorpay.com','api.razorpay.com','getyourticket.in',
+            	'www.getyourticket.in','mercury-t2.phonepe.com','192.168.0.141','www.cashfree.com','api.cashfree.com','razorpay.com','api.razorpay.com','getyourticket.in',
     ];
 	protected $allowedIps = [
         '111.125.194.83',

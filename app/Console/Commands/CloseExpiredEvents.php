@@ -15,28 +15,21 @@ class CloseExpiredEvents extends Command
 
     public function handle()
     {
-        $today = Carbon::today()->format('Y-m-d');
+        $today = now()->toDateString();
 
-        $events = Event::where('status', 1)->get(); // only active events
-      // Log::info('Active events count: ' . $events->count());
+        // Step 1: Close expired events based on the LAST date in date_range
+        Event::where('status', 1)
+            ->whereRaw("SUBSTRING_INDEX(date_range, ',', -1) < ?", [$today])
+            ->update(['status' => 0]);
 
-        foreach ($events as $event) {
+        // Step 2: Get all events that are closed today (status = 0)
+        $expiredEvents = Event::where('status', 0)->pluck('id')->toArray();
 
-            // handle: "2025-09-09,2025-10-11" OR "2025-09-15"
-            $dates = explode(',', $event->date_range);
-            $endDate = trim(end($dates)); // always get last date
-
-           // Log::info("Checking event ID: {$event->id} | End Date: {$endDate} | Today: {$today}");
-
-            if ($today >= $endDate) {
-
-                $event->update(['status' => 0]);
-                Ticket::where('event_id', $event->id)->update(['status' => 0]);
-
-                //Log::info("Expired → Event ID {$event->id} closed & tickets closed");
-            }
+        // Step 3: Close all tickets for expired events
+        if (!empty($expiredEvents)) {
+            Ticket::whereIn('event_id', $expiredEvents)->update(['status' => 0]);
         }
 
-        $this->info("Expired events and their tickets updated successfully.");
+        $this->info("Expired events and tickets closed successfully.");
     }
 }
