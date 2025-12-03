@@ -474,6 +474,10 @@ class UserController extends Controller
     {
         try {
             // return response()->json($request->all());
+            $request->validate([
+                'email' => 'sometimes|email|unique:users,email,' . $id,
+                'number' => 'sometimes|digits:10|unique:users,number,' . $id,
+            ]);
             $user = User::findOrFail($id);
             $role = null;
             if ($request->has('name')) {
