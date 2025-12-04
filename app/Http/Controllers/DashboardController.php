@@ -1874,8 +1874,8 @@ class DashboardController extends Controller
 
                 // Helper closure for event filtering
                 $eventFilter = function ($q) use ($organizerId) {
-                    $q->where('user_id', $organizerId)
-                        ->where('status', '1'); // ✔ Only Active Events
+                    $q->where('user_id', $organizerId);
+                        // ->where('status', '1'); // ✔ Only Active Events
                 };
 
                 // Today Online
