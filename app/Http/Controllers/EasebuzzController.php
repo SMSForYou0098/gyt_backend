@@ -1251,19 +1251,6 @@ class EasebuzzController extends Controller
     private function transferEventBooking($decryptedSessionId, $status, $paymentId)
     {
 
-        // $alreadyProcessed = Booking::where('payment_id', $paymentId)
-        //     ->orWhere('session_id', $decryptedSessionId)
-        //     ->first();
-
-        // $alreadyInMaster = MasterBooking::Where('session_id', $decryptedSessionId)
-        //     ->first();
-
-        // if ($alreadyProcessed || $alreadyInMaster) {
-        //     return response()->json([
-        //         'status' => false,
-        //         'msg' => 'This transaction is already processed. Duplicate booking blocked.'
-        //     ], 409);
-        // }
 
         $bookingMaster = PenddingBookingsMaster::where('session_id', $decryptedSessionId)->with('ticket.event')->get();
         $bookings = PenddingBooking::where('session_id', $decryptedSessionId)->with('ticket.event')->get();
@@ -1326,6 +1313,12 @@ class EasebuzzController extends Controller
         if ($bookings->isNotEmpty()) {
             foreach ($bookings as $individualBooking) {
                 if ($status === 'success') {
+                    $alreadyExists = Booking::where('token', $individualBooking->token)->exists();
+
+                    if ($alreadyExists) {
+                        $individualBooking->delete();
+                        continue;
+                    }
                     $booking = $this->bookingData($individualBooking, $paymentId);
                     if ($booking) {
                         $masterBookingIDs[] = $booking->id;
@@ -1337,11 +1330,24 @@ class EasebuzzController extends Controller
                 } else {
                     $individualBooking->payment_status = $status;
                 }
-                $individualBooking->save();
+                if ($individualBooking->exists) {
+                    $individualBooking->save();
+                }
             }
         }
 
         if ($bookingMaster->isNotEmpty() && $status === 'success') {
+            $existsMaster = MasterBooking::where('session_id', $decryptedSessionId)
+                ->where('order_id', $orderId)
+                ->exists();
+
+            if ($existsMaster) {
+                \DB::commit();
+                return response()->json([
+                    'status' => true,
+                    'message' => 'Master booking already exists, duplicate skipped.'
+                ], 200);
+            }
             $updated = $this->updateMasterBooking($bookingMaster, $masterBookingIDs, $paymentId);
             if ($updated) {
                 $bookingMaster->each->delete();
