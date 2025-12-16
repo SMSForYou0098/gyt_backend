@@ -21,6 +21,7 @@ class RestrictPaymentResponse
       'api.razorpay.com',
       'api.cashfree.com',
       'www.cashfree.com',
+      'www.getyourticket.in',
       'getyourticket.in',
     ];
 

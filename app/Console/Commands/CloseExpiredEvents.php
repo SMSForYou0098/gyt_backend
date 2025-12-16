@@ -13,7 +13,7 @@ class CloseExpiredEvents extends Command
     protected $signature = 'events:close-expired';
     protected $description = 'Close events and their tickets when end date is completed';
 
-    public function handle()
+       public function handle()
     {
         $today = now()->toDateString();
 

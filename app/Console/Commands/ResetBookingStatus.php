@@ -8,6 +8,7 @@ use App\Models\Booking;
 use App\Models\ComplimentaryBookings;
 use App\Models\PosBooking;
 use Carbon\Carbon;
+use App\Models\SponsorBooking;
 use Illuminate\Console\Command;
 use Illuminate\Support\Facades\Log;
 
@@ -27,6 +28,14 @@ class ResetBookingStatus extends Command
             $booking->status = 0;
             $booking->save();
         }
+
+        $SponsorBookings = SponsorBooking::where('type', 'season')->get();
+
+        foreach ($SponsorBookings as $SponsorBooking) {
+            $SponsorBooking->status = 0;
+            $SponsorBooking->save();
+        }
+
 
         $generatedBookings = ComplimentaryBookings::where('type', 'generated')->get();
         foreach ($generatedBookings as $compBooking) {

@@ -22,7 +22,7 @@ class PenddingBookingsMaster extends Model
         'amount',
         'discount',
         'payment_method',
-        'session_id'
+        'session_id','booking_type',
     ];
 
     public function bookings(): HasMany

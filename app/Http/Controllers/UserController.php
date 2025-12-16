@@ -138,14 +138,14 @@ class UserController extends Controller
         // }
         if ($loggedInUser->hasRole('Admin')) {
             // Admin → all users
-            $query = User::with(['roles', 'reportingUser', 'latestLoginHistory']);
+            $query = User::with(['roles', 'reportingUser','latestLoginHistory']);
         } elseif ($loggedInUser->hasRole('Organizer')) {
             // Organizer → only their sub-users
-            $query = User::with(['roles', 'reportingUser', 'latestLoginHistory'])
+            $query = User::with(['roles', 'reportingUser','latestLoginHistory'])
                 ->where('reporting_user', $loggedInUser->id);
         } else {
             // Other roles → only self
-            $query = User::with(['roles', 'reportingUser', 'latestLoginHistory'])
+            $query = User::with(['roles', 'reportingUser','latestLoginHistory'])
                 ->where('id', $loggedInUser->id);
         }
 
@@ -161,7 +161,7 @@ class UserController extends Controller
         $canViewEmail = $permissions['View Email'];
 
         $allUsers = $users->map(function ($user) use ($canViewContact, $canViewEmail) {
-            $login = $user->latestLoginHistory;
+           $login = $user->latestLoginHistory;
             return [
                 'id' => $user->id,
                 'name' => $user->name,
@@ -173,7 +173,6 @@ class UserController extends Controller
                 'organisation' => $user->organisation,
                 'created_at' => $user->created_at,
                 'authentication' => $user->authentication,
-
                 'ip_address' => $login->ip_address ?? null,
                 'city'       => $login->city ?? null,
                 'state'      => $login->state ?? null,
@@ -210,25 +209,8 @@ class UserController extends Controller
     public function create(Request $request, SmsService $smsService, WhatsappService $whatsappService)
     {
         try {
-            $request->validate([
-                'number' => 'required|string|unique:users,number',
-            ], [
-                'number.unique' => 'The mobile number has already been taken.',
-            ]);
-            if ($request->email) {
-
-                $request->validate([
-                    'email' => 'email|unique:users,email,NULL,id,deleted_at,NULL',
-                    // 'email' => 'required|email|unique:users,email',
-                ], [
-                    'email.unique' => 'The email has already been taken.',
-                ]);
-            }
-
-            // Additional validation for other fields
-            $validatedData = $request->validate([
-                'name' => 'required|string|max:255',
-            ]);
+          	$validation = $this->getUserValidationRules();
+            $request->validate($validation['rules'], $validation['messages']);
 
             $user = new User();
             $user->name = $request->name;
@@ -379,7 +361,7 @@ class UserController extends Controller
         $roles = Role::all();
 
         $user = User::with(['reportingUser', 'shop'])->where('id', $id)->first();
-        // return response()->json($user);
+        
         $userWithReportingUserNames = [
             'id' => $user->id,
             'name' => $user->name,
@@ -473,11 +455,8 @@ class UserController extends Controller
     public function update(Request $request, string $id, SmsService $smsService, WhatsappService $whatsappService)
     {
         try {
-            // return response()->json($request->all());
-            $request->validate([
-                'email' => 'sometimes|email|unique:users,email,' . $id,
-                'number' => 'sometimes|digits:10|unique:users,number,' . $id,
-            ]);
+            $validation = $this->getUserValidationRules((int)$id);
+            $request->validate($validation['rules'], $validation['messages']);
             $user = User::findOrFail($id);
             $role = null;
             if ($request->has('name')) {
@@ -694,6 +673,85 @@ class UserController extends Controller
             // Return an error response
             return response()->json(['status' => false, 'message' => $e->getMessage()], 500);
         }
+    }
+  
+  
+  	private function getUserValidationRules(?int $id = null): array
+    {
+        $isUpdate = $id !== null;
+        $requiredOrSometimes = $isUpdate ? 'sometimes' : 'required';
+
+        return [
+            'rules' => [
+                // Core fields
+                'name' => "{$requiredOrSometimes}|string|min:2|max:255|regex:/^[a-zA-Z\s]+$/",
+                'number' => "{$requiredOrSometimes}|digits:10|regex:/^[6-9][0-9]{9}$/|unique:users,number" . ($id ? ",{$id}" : ''),
+                'email' => ($isUpdate ? 'sometimes' : 'nullable') . "|email|max:255|unique:users,email" . ($id ? ",{$id}" : ',NULL,id,deleted_at,NULL'),
+                'password' => ($isUpdate ? 'sometimes' : 'required') . "|string|min:8",
+
+                // Personal details
+                'company_name' => 'nullable|string|min:2|max:255',
+                'designation' => 'nullable|string|min:2|max:100',
+                'address' => 'nullable|string|min:5|max:500',
+                'organisation' => 'nullable|string|min:2|max:255',
+                'alt_number' => 'nullable|digits:10|regex:/^[6-9][0-9]{9}$/',
+                'pincode' => 'nullable|digits:6',
+                'state' => 'nullable|string|min:2|max:100',
+                'city' => 'nullable|string|min:2|max:100',
+
+                // Bank details
+                'bank_name' => 'nullable|string|min:2|max:100',
+                'bank_number' => 'nullable|string|min:9|max:18|regex:/^[0-9]+$/',
+                'bank_ifsc' => 'nullable|string|size:11|regex:/^[A-Z]{4}0[A-Z0-9]{6}$/',
+                'bank_branch' => 'nullable|string|min:2|max:100',
+                'bank_micr' => 'nullable|digits:9',
+                'account_holder' => 'nullable|string|min:2|max:255|regex:/^[a-zA-Z\s]+$/',
+
+                // Tax & Business
+                'tax_number' => 'nullable|string|max:50',
+                'org_gst_no' => 'nullable|string|size:15|regex:/^[0-9]{2}[A-Z]{5}[0-9]{4}[A-Z]{1}[1-9A-Z]{1}Z[0-9A-Z]{1}$/',
+                'pan_no' => 'nullable|string|size:10|regex:/^[A-Z]{5}[0-9]{4}[A-Z]{1}$/',
+
+                // Organization
+                'org_type_of_company' => 'nullable|string|max:100',
+                'org_office_address' => 'nullable|string|min:5|max:500',
+                'org_name_signatory' => 'nullable|string|min:2|max:255',
+                'org_signature_type' => 'nullable|string|max:50',
+
+                // Other
+                'reporting_user' => 'nullable|integer|exists:users,id',
+                'authentication' => 'nullable|boolean|max:50',
+                'payment_method' => 'nullable|string|max:50',
+                'agent_disc' => 'nullable|numeric|min:0|max:100',
+                'agreement_status' => 'nullable|boolean',
+                'status' => 'nullable|boolean',
+                'qr_length' => 'nullable|integer|min:1|max:100',
+
+                // Files
+                'photo' => 'nullable|image|mimes:jpeg,png,jpg|max:2048',
+                'org_signatory_image' => 'nullable|image|mimes:jpeg,png,jpg|max:2048',
+                'doc' => 'nullable|file|mimes:pdf,jpeg,png,jpg|max:5120',
+
+                // Role
+                'role_id' => 'nullable|integer|exists:roles,id',
+                'role_name' => 'nullable|string|exists:roles,name',
+            ],
+
+            'messages' => [
+                'name.regex' => 'Name must contain only letters and spaces.',
+                'name.min' => 'Name must be at least 2 characters.',
+                'number.regex' => 'Please enter a valid Indian mobile number.',
+                'number.digits' => 'Mobile number must be exactly 10 digits.',
+                'number.unique' => 'This mobile number is already registered.',
+                'email.unique' => 'This email is already registered.',
+                'alt_number.regex' => 'Please enter a valid alternate mobile number.',
+                'bank_ifsc.regex' => 'Please enter a valid IFSC code.',
+                'org_gst_no.regex' => 'Please enter a valid GST number.',
+                'pan_no.regex' => 'Please enter a valid PAN number.',
+                'photo.max' => 'Photo size must be less than 2MB.',
+                'doc.max' => 'Document size must be less than 5MB.',
+            ]
+        ];
     }
 
     private function sendMail($email)
@@ -1537,13 +1595,13 @@ class UserController extends Controller
     // }
 
     //    public function viewAgreement($id)
-    //     {
-    //         $user = User::findOrFail($id);
+//     {
+//         $user = User::findOrFail($id);
 
     //         $data = $this->prepareAgreementData($user);
 
     //         return view('agreements.org-agreement', $data);
-    //     }
+//     }
 
     public function downloadAgreement($id)
     {
@@ -1555,6 +1613,7 @@ class UserController extends Controller
             ->setPaper('a4');
 
         return $pdf->download("Organizer_Agreement_{$user->id}.pdf");
+
     }
 
     private function prepareAgreementData($user)

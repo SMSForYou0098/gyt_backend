@@ -19,14 +19,13 @@ class Kernel extends ConsoleKernel
         // $schedule->command('balance-alerts')->dailyAt('10:00');
 
         $schedule->command('bookings:reset-status')->dailyAt('00:00');
-         $schedule->command('bookings:reset-status')->dailyAt('11:00');
+         $schedule->command('bookings:reset-status')->dailyAt('11:15');
         $schedule->command('bookings:reset-status')->dailyAt('15:45');
         // $schedule->command('bookings:reset-status')->dailyAt('14:07');
         $schedule->command('logs:clear')->daily();
         $schedule->command('app:close-expired-sales')->dailyAt('00:00');
         $schedule->command('tickets:check-soldout')->everyFiveMinutes();
-       $schedule->command('events:close-expired')->dailyAt('00:00');
-
+      $schedule->command('events:close-expired')->dailyAt('00:00');
     }
 
     /**

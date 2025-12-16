@@ -26,15 +26,15 @@ use App\Services\PermissionService;
 
 class AgentController extends Controller
 {
-    
-       public function list(Request $request, $id,PermissionService $permissionService)
+
+    public function list(Request $request, $id, PermissionService $permissionService)
     {
         try {
             $loggedInUser = Auth::user();
-          	$permissions = $permissionService->check(['View Username', 'View Contact']);
+            $permissions = $permissionService->check(['View Username', 'View Contact']);
             $startDate = Carbon::today()->startOfDay();
             $endDate = Carbon::today()->endOfDay();
-    
+
             if ($request->has('date')) {
                 $dates = explode(',', $request->date);
                 $startDate = Carbon::parse($dates[0])->startOfDay();
@@ -42,24 +42,24 @@ class AgentController extends Controller
                     ? Carbon::parse($dates[1])->endOfDay()
                     : Carbon::parse($dates[0])->endOfDay();
             }
-    
+
             // Get organizer's ticket IDs if needed
             $organizerTicketIds = null;
             if ($loggedInUser->hasRole('Organizer')) {
                 $eventIds = Event::where('user_id', $loggedInUser->id)->pluck('id');
                 $organizerTicketIds = Ticket::whereIn('event_id', $eventIds)->pluck('id');
             }
-    
+
             // Get master bookings
             $masterQuery = AgentMaster::withTrashed()
                 ->whereBetween('created_at', [$startDate, $endDate]);
-    
+
             if ($loggedInUser->hasRole('Agent')) {
                 $masterQuery->where('agent_id', $loggedInUser->id);
             }
-    
+
             $Masterbookings = $masterQuery->get();
-    
+
             // Filter master bookings for organizer after fetching
             if ($loggedInUser->hasRole('Organizer') && $organizerTicketIds) {
                 $Masterbookings = $Masterbookings->filter(function ($master) use ($organizerTicketIds) {
@@ -74,53 +74,53 @@ class AgentController extends Controller
                     return false;
                 });
             }
-    
+
             $allBookingIds = $Masterbookings->flatMap(function ($master) {
                 return is_array($master->booking_id) ? $master->booking_id : [];
             })->unique()->values();
-    
+
             // Pre-fetch all agent bookings for master bookings
             $agentBookingsCollection = Agent::withTrashed()
                 ->whereIn('id', $allBookingIds)
                 ->with(['ticket.event.user', 'user:id,name,number,email,photo,reporting_user,company_name,designation', 'agentUser:id,name'])
                 ->get()->keyBy('id');
-    
+
             // Transform master bookings
             $Masterbookings = $Masterbookings->map(function ($master) use ($agentBookingsCollection) {
                 $ids = is_array($master->booking_id) ? $master->booking_id : [];
                 $bookings = collect($ids)->map(function ($id) use ($agentBookingsCollection) {
                     return $agentBookingsCollection->get($id);
                 })->filter()->values();
-    
+
                 // Get first booking for master info
                 $firstBooking = $bookings->first();
-                
+
                 if ($firstBooking) {
                     $master->agent_name = $firstBooking->agentUser->name ?? '';
                     $master->event_name = $firstBooking->ticket->event->name ?? '';
                     $master->organizer = $firstBooking->ticket->event->user->name ?? '';
                 }
-                
+
                 $master->bookings = $bookings;
                 $master->is_deleted = $master->trashed();
                 $master->quantity = $bookings->count();
                 $master->is_master = true; // Flag to identify master booking
                 return $master;
             });
-    
+
             // Get normal bookings (single bookings that are NOT part of master bookings)
             $normalQuery = Agent::withTrashed()
                 ->with(['ticket.event.user', 'user:id,name,number,email,photo,reporting_user,company_name,designation', 'agentUser:id,name'])
                 ->whereBetween('created_at', [$startDate, $endDate])
                 ->whereNotIn('id', $allBookingIds); // Exclude master booking IDs
-    
+
             if ($loggedInUser->hasRole('Agent')) {
                 $normalQuery->where('agent_id', $loggedInUser->id);
             } elseif ($loggedInUser->hasRole('Organizer') && $organizerTicketIds) {
                 $normalQuery->whereIn('ticket_id', $organizerTicketIds);
             }
             // Admin sees all - no additional filtering needed
-    
+
             $normalBookings = $normalQuery->get()
                 ->map(function ($booking) {
                     $booking->agent_name = $booking->agentUser->name ?? '';
@@ -131,11 +131,11 @@ class AgentController extends Controller
                     $booking->is_master = false; // Flag for single booking
                     return $booking;
                 })->values();
-    
+
             $combinedBookings = $Masterbookings->concat($normalBookings)
                 ->sortByDesc('created_at')
                 ->values();
-    
+
             return response()->json([
                 'status' => true,
                 'bookings' => $combinedBookings,
@@ -147,35 +147,34 @@ class AgentController extends Controller
             ], 500);
         }
     }
-    
+
 
     //store agent
     public function store(Request $request, $id, SmsService $smsService, WhatsappService $whatsappService)
     {
         try {
             $user = auth()->user();
-            if ($user->hasRole('Agent')) {
-                $latestBalance = Balance::where('user_id', $user->id)
-                    ->latest()
-                    ->first();
-                // return response()->json($latestBalance);
+
+            if ($user->hasRole('Agent') || $user->hasRole('Sponsor')) {
+                $latestBalance = Balance::where('user_id', $user->id)->latest()->first();
 
                 if (!$latestBalance) {
                     return response()->json([
                         'status' => false,
-                        'message' => 'Balance not found for the agent.'
-                    ], 200);
+                        'message' => 'Booking failed due to insufficient balance.'
+                    ], 400);
                 }
 
-                $ticketAmount = $request->amount;
+                $totalAmount = collect($request->tickets)->sum('totalFinalAmount');
 
-                if ($latestBalance->total_credits < $ticketAmount) {
+                if ($latestBalance->total_credits < $totalAmount) {
                     return response()->json([
                         'status' => false,
                         'message' => 'Not sufficient amount in balance.'
                     ], 400);
                 }
             }
+
             $bookings = [];
             $firstIteration = true;
             $attendees = $request->attendees ?? [];
@@ -183,20 +182,17 @@ class AgentController extends Controller
                 $attendees = [];
             }
 
-            $sessionId = $request->session_id;
-            if (!$sessionId) {
-                $getSession = $this->generateEncryptedSessionId();
-                $sessionId = $getSession['original'];
-            }
+            $sessionId = $request->session_id ?? $this->generateEncryptedSessionId()['original'];
 
             if ($request->tickets['quantity'] > 0) {
                 for ($i = 0; $i < $request->tickets['quantity']; $i++) {
-                    $booking = new Agent();
+                    $booking = new Booking();
                     $booking->ticket_id = $request->tickets['id'];
                     $booking->batch_id = Ticket::where('id', $request->tickets['id'])->value('batch_id');
-                    $booking->agent_id = $request->agent_id;
+                    $booking->booking_by = $request->agent_id;
                     $booking->user_id = $request->user_id;
                     $booking->session_id = $sessionId;
+                    $booking->booking_type = 'agent';
 
                     $ticket = Ticket::findOrFail($request->tickets['id']);
                     $event = $ticket->event;
@@ -248,7 +244,7 @@ class AgentController extends Controller
                     $shortLink =  $orderId;
                     $shortLinksms = "getyourticket.in/t/{$orderId}";
 
-                  $dates = explode(',', $event->date_range);
+                    $dates = explode(',', $event->date_range);
                     $formattedDates = [];
                     foreach ($dates as $date) {
                         $formattedDates[] = \Carbon\Carbon::parse($date)->format('d-m-Y');
@@ -256,7 +252,7 @@ class AgentController extends Controller
                     $dateRangeFormatted = implode(' | ', $formattedDates);
 
                     $eventDateTime = $dateRangeFormatted . ' | ' . $event->start_time . ' - ' . $event->end_time;
-                  
+
                     //$eventDateTime = str_replace(',', ' |', $event->date_range) . ' | ' . $event->start_time . ' - ' . $event->end_time;
 
                     $mediaurl =  $event->thumbnail;
@@ -266,7 +262,7 @@ class AgentController extends Controller
                         'templateName' => 'Agent Booking Template',
                         'whatsappTemplateData' => $whatsappTemplateName,
                         'shortLink' => $shortLink,
-                        'insta_whts_url' =>$event->insta_whts_url ?? 'helloinsta',
+                        'insta_whts_url' => $event->insta_whts_url ?? 'helloinsta',
                         'mediaurl' => $mediaurl,
                         'values' => [
                             (string) ($booking->name ?? 'Guest'),
@@ -308,7 +304,7 @@ class AgentController extends Controller
     {
         try {
             $user = auth()->user();
-            if ($user->hasRole('Agent')) {
+            if ($user->hasRole('Agent') || $user->hasRole('Sponsor')) {
                 $latestBalance = Balance::where('user_id', $user->id)->latest()->first();
 
                 if (!$latestBalance) {
@@ -328,7 +324,7 @@ class AgentController extends Controller
                 }
             }
 
-            $agentMasterBooking = new AgentMaster();
+            $agentMasterBooking = new MasterBooking();
             $bookingIds = $request->input('bookingIds');
 
             if (is_string($bookingIds)) {
@@ -342,7 +338,7 @@ class AgentController extends Controller
             // Save the master booking details
             $agentMasterBooking->booking_id = $bookingIds;
             $agentMasterBooking->user_id = $request->user_id;
-            $agentMasterBooking->agent_id = $request->agent_id;
+            $agentMasterBooking->booking_by = $request->agent_id;
             $agentMasterBooking->session_id = $sessionId;
 
             // $agentMasterBooking->order_id = $this->generateRandomCode(); // Generate an order ID
@@ -350,6 +346,7 @@ class AgentController extends Controller
             $agentMasterBooking->amount = $request->amount;
             $agentMasterBooking->discount = $request->discount;
             $agentMasterBooking->payment_method = $request->payment_method;
+            $agentMasterBooking->booking_type = 'agent';
             $agentMasterBooking->save();
 
             if ($user->hasRole('Agent')) {
@@ -373,7 +370,7 @@ class AgentController extends Controller
             if ($agentMasterBookingDetails) {
                 $bookingIds = $agentMasterBookingDetails->booking_id;
                 if (is_array($bookingIds)) {
-                    $agentMasterBookingDetails->bookings = Agent::whereIn('id', $bookingIds)->with('ticket.event.user.smsConfig')->get();
+                    $agentMasterBookingDetails->bookings = Booking::whereIn('id', $bookingIds)->with('ticket.event.user.smsConfig')->get();
                 } else {
                     $agentMasterBookingDetails->bookings = collect();
                 }
@@ -394,7 +391,7 @@ class AgentController extends Controller
                 $shortLink = $orderId;
                 $shortLinksms = "getyourticket.in/t/{$orderId}";
 
-                              $dates = explode(',', $event->date_range);
+                $dates = explode(',', $event->date_range);
                 $formattedDates = [];
                 foreach ($dates as $date) {
                     $formattedDates[] = \Carbon\Carbon::parse($date)->format('d-m-Y');
@@ -402,7 +399,7 @@ class AgentController extends Controller
                 $dateRangeFormatted = implode(' | ', $formattedDates);
 
                 $eventDateTime = $dateRangeFormatted . ' | ' . $event->start_time . ' - ' . $event->end_time;
-              
+
                 //$eventDateTime = str_replace(',', ' |', $event->date_range) . ' | ' . $event->start_time . ' - ' . $event->end_time;
                 $mediaurl = $event->thumbnail; // ✅ use correct event thumbnail
 
@@ -412,7 +409,7 @@ class AgentController extends Controller
                     'templateName' => 'Agent Booking Template',
                     'whatsappTemplateData' => $whatsappTemplateName,
                     'shortLink' => $shortLink,
-                    'insta_whts_url' =>$event->insta_whts_url ?? 'helloinsta',
+                    'insta_whts_url' => $event->insta_whts_url ?? 'helloinsta',
                     'mediaurl' => $mediaurl,
                     'values' => [
                         $booking->name,
@@ -426,7 +423,7 @@ class AgentController extends Controller
                     ],
 
                     'replacements' => [
-                       ':C_Name' => $booking->name,
+                        ':C_Name' => $booking->name,
                         ':T_QTY' => count($agentMasterBookingDetails->bookings),
                         ':Ticket_Name' => $ticket->name,
                         ':Event_Name' => $event->name,
@@ -515,29 +512,29 @@ class AgentController extends Controller
 
         $grouped = $bookings->groupBy('session_id')->map(function ($group) {
             $first = $group->first();
-              $token = null;
+            $token = null;
 
-    // Check if AgentMaster has record for this session
-    $masterRecord = \App\Models\AgentMaster::where('session_id', $first->session_id)->first();
-    if ($masterRecord) {
-        $token = $masterRecord->order_id ?? '';
-    } else {
-        $token = $first->token ?? '';
-    }
+            // Check if AgentMaster has record for this session
+            $masterRecord = \App\Models\AgentMaster::where('session_id', $first->session_id)->first();
+            if ($masterRecord) {
+                $token = $masterRecord->order_id ?? '';
+            } else {
+                $token = $first->token ?? '';
+            }
             return [
-                 'event_name'    => $first?->ticket?->event?->name ?? 'N/A',
-        'organizer'     => $first?->ticket?->event?->user?->name ?? 'N/A',
-        'agent_name'    => $first?->agentUser?->name ?? 'N/A',
-        'user_name'     => $first?->user?->name ?? 'No User',
-        'booking_number'=> $first?->number ?? '',
-        'ticket_name'   => $first?->ticket?->name ?? '',
-        'quantity'      =>  $group->count(), // total tickets booked in this session
-        'base_amount'   => $group->sum('base_amount') ?? 0,
-        'discount'      => $group->sum('discount') ?? 0,
-        'amount'        => $group->sum('amount') ?? 0,
-        'status'        => $first?->trashed() ? 'Cancelled' : $first->status,
-        'token'         => $token ?? '',
-        'booking_date'  => $first?->created_at?->format('d-m-Y | h:i:s A') ?? 'N/A',
+                'event_name'    => $first?->ticket?->event?->name ?? 'N/A',
+                'organizer'     => $first?->ticket?->event?->user?->name ?? 'N/A',
+                'agent_name'    => $first?->agentUser?->name ?? 'N/A',
+                'user_name'     => $first?->user?->name ?? 'No User',
+                'booking_number' => $first?->number ?? '',
+                'ticket_name'   => $first?->ticket?->name ?? '',
+                'quantity'      =>  $group->count(), // total tickets booked in this session
+                'base_amount'   => $group->sum('base_amount') ?? 0,
+                'discount'      => $group->sum('discount') ?? 0,
+                'amount'        => $group->sum('amount') ?? 0,
+                'status'        => $first?->trashed() ? 'Cancelled' : $first->status,
+                'token'         => $token ?? '',
+                'booking_date'  => $first?->created_at?->format('d-m-Y | h:i:s A') ?? 'N/A',
                 // 'event_name' => $first?->ticket?->event?->name ?? 'N/A',
                 // 'organizer' => $first?->ticket?->event?->user?->name ?? 'N/A',
                 // 'agent_name' => $first?->agentUser?->name ?? 'N/A',
@@ -552,35 +549,6 @@ class AgentController extends Controller
         // return Excel::download(new AgentBookingExport($bookings), 'AgentBooking_export.xlsx');
         return Excel::download(new AgentBookingExport($grouped), 'AgentBooking_export.xlsx');
     }
-
-    // public function export(Request $request)
-    // {
-    //     ini_set('memory_limit', '1024M');
-    //     set_time_limit(300);
-
-    //     $dates = $request->input('date') ? explode(',', $request->input('date')) : null;
-
-    //     $query = Agent::withTrashed()
-    //         ->with(['ticket.event.user', 'user', 'agentUser']);
-
-    //     if ($dates) {
-    //         if (count($dates) === 1) {
-    //             $singleDate = \Carbon\Carbon::parse($dates[0])->toDateString();
-    //             $query->whereDate('created_at', $singleDate);
-    //         } elseif (count($dates) === 2) {
-    //             $startDate = \Carbon\Carbon::parse($dates[0])->startOfDay();
-    //             $endDate = \Carbon\Carbon::parse($dates[1])->endOfDay();
-    //             $query->whereBetween('created_at', [$startDate, $endDate]);
-    //         }
-    //     }
-
-    //     $bookings = $query->get(); // Keep full Eloquent models
-
-    //     return \Maatwebsite\Excel\Facades\Excel::download(
-    //         new \App\Exports\AgentBookingExport($bookings),
-    //         'AgentBooking_export.xlsx'
-    //     );
-    // }
 
 
     public function userFormNumber(Request $request, $id)
@@ -616,94 +584,6 @@ class AgentController extends Controller
         }
     }
 
-    // public function destroy($id, $token)
-    // {
-    //     $Masterbookings = AgentMaster::where('id', $id)
-    //         ->where('order_id', $token)
-    //         ->latest()
-    //         ->first();
-
-    //     if ($Masterbookings) {
-    //         $bookingIds = is_array($Masterbookings->booking_id)
-    //             ? $Masterbookings->booking_id
-    //             : json_decode($Masterbookings->booking_id, true);
-
-    //         if (!empty($bookingIds) && is_array($bookingIds)) {
-    //             Agent::whereIn('id', $bookingIds)->delete();
-    //         }
-
-    //         $Masterbookings->delete();
-
-    //         return response()->json([
-    //             'status' => true,
-    //             'message' => 'Master Booking and related bookings deleted successfully'
-    //         ], 200);
-    //     } else {
-    //         $normalBooking = Agent::where('id', $id)->where('token', $token)->first();
-
-    //         if ($normalBooking) {
-    //             $normalBooking->delete();
-
-    //             return response()->json([
-    //                 'status' => true,
-    //                 'message' => 'Booking deleted successfully'
-    //             ], 200);
-    //         } else {
-    //             return response()->json([
-    //                 'status' => false,
-    //                 'message' => 'Booking not found'
-    //             ], 404);
-    //         }
-    //     }
-    // }
-
-
-    // public function restoreBooking($id, $token)
-    // {
-    //     $Masterbookings = AgentMaster::withTrashed()
-    //         ->where('id', $id)
-    //         ->where('order_id', $token)
-    //         ->first();
-
-    //     if ($Masterbookings) {
-    //         $bookingIds = is_array($Masterbookings->booking_id)
-    //             ? $Masterbookings->booking_id
-    //             : json_decode($Masterbookings->booking_id, true);
-
-    //         if (!empty($bookingIds) && is_array($bookingIds)) {
-    //             Agent::withTrashed()
-    //                 ->whereIn('id', $bookingIds)
-    //                 ->restore();
-    //         }
-
-    //         $Masterbookings->restore();
-
-    //         return response()->json([
-    //             'status' => true,
-    //             'message' => 'Master Booking and related bookings restored successfully'
-    //         ], 200);
-    //     } else {
-    //         $normalBooking = Agent::withTrashed()
-    //             ->where('id', $id)
-    //             ->where('token', $token)
-    //             ->latest()
-    //             ->first();
-
-    //         if ($normalBooking) {
-    //             $normalBooking->restore();
-
-    //             return response()->json([
-    //                 'status' => true,
-    //                 'message' => 'Booking restored successfully'
-    //             ], 200);
-    //         } else {
-    //             return response()->json([
-    //                 'status' => false,
-    //                 'message' => 'Booking not found'
-    //             ], 404);
-    //         }
-    //     }
-    // }
 
     public function destroy($token)
     {
@@ -794,146 +674,6 @@ class AgentController extends Controller
     }
 
 
-    // public function ganerateCard($token)
-    // {
-    //     // 1. Cache માંથી order_id લાવો
-    //     $order_id = Cache::get('token_order_' . $token);
-
-    //     if (!$order_id) {
-    //         return response()->json([
-    //             'status' => false,
-    //             'message' => 'Invalid or expired token'
-    //         ], 403);
-    //     }
-
-    //     // 2. Master Booking Try
-    //     $Masterbooking = AgentMaster::withTrashed()->where('order_id', $order_id)->first();
-
-    //     if ($Masterbooking) {
-    //         $bookingIds = is_array($Masterbooking->booking_id)
-    //             ? $Masterbooking->booking_id
-    //             : json_decode($Masterbooking->booking_id, true);
-
-    //         $bookings = Agent::withTrashed()
-    //             ->whereIn('id', $bookingIds)
-    //             ->with('attendee', 'ticket.event')
-    //             ->get();
-
-    //         $userArray = [];
-    //         $firstCardUrl = null;
-
-    //         foreach ($bookings as $index => $booking) {
-    //             $attendee = $booking->attendee;
-
-    //             if ($index === 0) {
-    //                 $firstCardUrl = $booking->ticket->background_image ?? null;
-    //             }
-
-    //             $userArray[] = [
-    //                 'token' => $booking->token,
-    //                 'booking_date' => $booking->created_at->format('d-m-Y'),
-    //                 'attendee' => $attendee ? [
-    //                     'name' => $attendee->Name ?? '',
-    //                     'email' => $attendee->Email ?? '',
-    //                     'phone' => $attendee->Mo ?? '',
-    //                     'photo' => $attendee->Photo ?? null,
-    //                 ] : null,
-    //             ];
-    //         }
-
-    //         $userDetails = User::find($Masterbooking->user_id);
-
-    //         $users = $userDetails ? [
-    //             'name' => $userDetails->name ?? null,
-    //             'number' => $userDetails->number ?? null,
-    //             'email' => $userDetails->email ?? null,
-    //         ] : null;
-
-    //         return response()->json([
-    //             'status' => true,
-    //             'type' => 'master',
-    //             'card_url' => $firstCardUrl,
-    //             'ticket' => isset($bookings[0]) ? [
-    //                 'price' => $bookings[0]->ticket->price ?? null,
-    //                 'currency' => $bookings[0]->ticket->currency ?? null,
-    //             ] : null,
-    //             'event' => isset($bookings[0]) ? [
-    //                 'name' => $bookings[0]->ticket->event->name ?? null,
-    //                 'country' => $bookings[0]->ticket->event->country ?? null,
-    //                 'state' => $bookings[0]->ticket->event->state ?? null,
-    //                 'city' => $bookings[0]->ticket->event->city ?? null,
-    //                 'date_range' => $bookings[0]->ticket->event->date_range ?? null,
-    //                 'start_time' => $bookings[0]->ticket->event->start_time ?? null,
-    //                 'end_time' => $bookings[0]->ticket->event->end_time ?? null,
-    //                 'entry_time' => $bookings[0]->ticket->event->entry_time ?? null,
-    //                 'address' => $bookings[0]->ticket->event->address ?? null,
-    //                 'ticket_terms' => $bookings[0]->ticket->event->ticket_terms ?? null,
-    //             ] : null,
-    //             'tokendata' => $token,
-    //             'data' => $userArray,
-    //             'users' => $users
-    //         ], 200);
-    //     }
-
-    //     // 3. Normal Booking Try
-    //     $normalBooking = Agent::withTrashed()
-    //         ->with('attendee', 'ticket.event')
-    //         ->where('token', $order_id)
-    //         ->first();
-
-    //     if ($normalBooking) {
-    //         $attendee = $normalBooking->attendee;
-
-    //         $userArray = [[
-    //             'token' => $normalBooking->token,
-    //             'booking_date' => $normalBooking->created_at->format('d-m-Y'),
-    //             'attendee' => $attendee ? [
-    //                 'name' => $attendee->Name ?? '',
-    //                 'email' => $attendee->Email ?? '',
-    //                 'phone' => $attendee->Mo ?? '',
-    //                 'photo' => $attendee->Photo ?? null,
-    //             ] : null,
-    //         ]];
-
-    //         $userDetails = User::find($normalBooking->user_id);
-
-    //         $users = $userDetails ? [
-    //             'name' => $userDetails->name ?? null,
-    //             'number' => $userDetails->number ?? null,
-    //             'email' => $userDetails->email ?? null,
-    //         ] : null;
-
-    //         return response()->json([
-    //             'status' => true,
-    //             'type' => 'normal',
-    //             'card_url' => $normalBooking->ticket->background_image ?? null,
-    //             'ticket' => [
-    //                 'price' => $normalBooking->ticket->price ?? null,
-    //                 'currency' => $normalBooking->ticket->currency ?? null,
-    //             ],
-    //             'event' => [
-    //                 'name' => $normalBooking->ticket->event->name ?? null,
-    //                 'country' => $normalBooking->ticket->event->country ?? null,
-    //                 'state' => $normalBooking->ticket->event->state ?? null,
-    //                 'city' => $normalBooking->ticket->event->city ?? null,
-    //                 'date_range' => $normalBooking->ticket->event->date_range ?? null,
-    //                 'start_time' => $normalBooking->ticket->event->start_time ?? null,
-    //                 'entry_time' => $normalBooking->ticket->event->entry_time ?? null,
-    //                 'end_time' => $normalBooking->ticket->event->end_time ?? null,
-    //                 'address' => $normalBooking->ticket->event->address ?? null,
-    //                 'ticket_terms' => $normalBooking->ticket->event->ticket_terms ?? null,
-    //             ],
-    //             'tokendata' => $token,
-    //             'data' => $userArray,
-    //             'users' => $users
-    //         ], 200);
-    //     }
-
-    //     // 4. Nothing found
-    //     return response()->json(['status' => false, 'message' => 'Booking not found.'], 404);
-    // }
-
-
     public function ganerateCard($token)
     {
         // $order_id = Cache::get($token);
@@ -989,7 +729,7 @@ class AgentController extends Controller
                 $userArray[] = [
                     'token' => $booking->token,
                     'booking_date' => $booking->created_at->format('d-m-Y'),
-                  'amount' => $booking->amount ?? 0,
+                    'amount' => $booking->amount ?? 0,
                     'attendee' => $attendee ? [
                         'name' => $attendee->Name ?? '',
                         'email' => $attendee->Email ?? '',
@@ -1066,7 +806,7 @@ class AgentController extends Controller
                 'data' => [[
                     'token' => $booking->token,
                     'booking_date' => $booking->created_at->format('d-m-Y'),
-                  'amount' => $booking->amount ?? 0,
+                    'amount' => $booking->amount ?? 0,
                     'attendee' => $attendee ? [
                         'name' => $attendee->Name ?? '',
                         'email' => $attendee->Email ?? '',
@@ -1081,52 +821,6 @@ class AgentController extends Controller
         // ===================== Not Found =====================
         return response()->json(['status' => false, 'message' => 'Booking not found.'], 404);
     }
-
-
-    // public function generate(Request $request, $order_id)
-    // {
-    //     $orderId = $order_id;
-
-
-    //     if (!$orderId) {
-    //         return response()->json(['status' => false, 'message' => 'Missing order_id'], 400);
-    //     }
-
-    //     $existsInMaster = Agent::where('token', $orderId)->exists();
-    //     $existsInBooking = AgentMaster::where('order_id', $orderId)->exists(); // Optional: only if needed
-
-    //     if (!$existsInMaster && !$existsInBooking) {
-    //         return response()->json(['status' => false, 'message' => 'Invalid order_id'], 403);
-    //     }
-
-    //     $allowedDomain = env('ALLOWED_DOMAIN', 'https://getyourticket.in/');
-    //     // $allowedDomain = 'https://getyourticket.in/';
-
-    //     $referer = $request->headers->get('referer');
-
-    //     if (!$referer || strpos($referer, $allowedDomain) !== 0) {
-    //         return response()->json(['status' => false, 'message' => 'Forbidden'], 200);
-    //     }
-
-    //     $cacheKeyByOrder = 'token_for_order_' . $orderId;
-
-    //     if (Cache::has($cacheKeyByOrder)) {
-    //         $token = Cache::get($cacheKeyByOrder);
-
-    //         // ✅ Even if token already exists, store reverse mapping again
-    //         Cache::put('token_order_' . $token, $orderId, now()->addMinutes(05));
-    //     } else {
-    //         $token = Str::random(32);
-    //         Cache::put($cacheKeyByOrder, $token, now()->addMinutes(05));
-    //         Cache::put('token_order_' . $token, $orderId, now()->addMinutes(05));
-    //     }
-
-    //     return response()->json([
-    //         'status' => true,
-    //         'order_id' => $orderId,
-    //         'token' => $token
-    //     ]);
-    // }
 
     public function generate(Request $request, $order_id)
     {
@@ -1177,10 +871,13 @@ class AgentController extends Controller
             Cache::put('token_order_' . $token, $orderId, now()->addMinutes(05));
         }
 
+        $group = !$existsInSponsorMaster;
+
         return response()->json([
             'status' => true,
             'order_id' => $orderId,
-            'token' => $token
+            'token' => $token,
+            'group' => $group
         ]);
     }
 

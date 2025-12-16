@@ -385,122 +385,149 @@ class ScanController extends Controller
                         'time' => $complimentaryBookings->updated_at
                     ], 404);
                 }
-            } elseif ($masterBookings) {
-                $allStatusZero = $relatedBookings->every(function ($relatedBooking) {
-                    return $relatedBooking->status == "0";
-                });
+            } else if ($masterBookings) {
+              
+            $allStatusZero = $relatedBookings->every(function ($relatedBooking) {
+                return $relatedBooking->status == "0";
+            });
 
-                if ($allStatusZero) {
-                    $masterBookings->bookings = $relatedBookings;
-                    return response()->json([
-                        'status' => true,
-                        'is_master' => true,
-                        'bookings' => $masterBookings,
-                        'attendee_required' => $event->Category->attendy_required ?? false,
-                        'event' => $event,
-                        'type' => "Online"
-                    ], 200);
-                } else {
-                    return response()->json([
-                        'status' => false,
-                        'message' => 'Already Scanned',
-                        'time' => $masterBookings->updated_at
-                    ], 400);
-                }
-            } elseif ($amusementMasterBookings) {
-                $allStatusZero = $relatedBookings->every(function ($relatedBooking) {
-                    return $relatedBooking->status == "0";
-                });
-
-                if ($allStatusZero) {
-                    $amusementMasterBookings->bookings = $relatedBookings;
-                    return response()->json([
-                        'status' => true,
-                        'is_master' => true,
-                        'bookings' => $amusementMasterBookings,
-                        'attendee_required' => $event->Category->attendy_required ?? false,
-                        'event' => $event,
-                        'type' => "Online"
-                    ], 200);
-                } else {
-                    return response()->json([
-                        'status' => false,
-                        'message' => 'Already Scanned',
-                        'time' => $amusementMasterBookings->updated_at
-                    ], 400);
-                }
-            } elseif ($agentMasterBookings) {
-                $allStatusZero = $relatedBookings->every(function ($relatedBooking) {
-                    return $relatedBooking->status == "0";
-                });
-
-                if ($allStatusZero) {
-                    $agentMasterBookings->bookings = $relatedBookings;
-                    return response()->json([
-                        'status' => true,
-                        'is_master' => true,
-                        'bookings' => $agentMasterBookings,
-                        'attendee_required' => $event->Category->attendy_required ?? false,
-                        'event' => $event,
-                        'type' => "Agent"
-                    ], 200);
-                } else {
-                    return response()->json([
-                        'status' => false,
-                        'message' => 'Already Scanned',
-                        'time' => $agentMasterBookings->updated_at
-                    ], 400);
-                }
-            } elseif ($AccreditationMasterBooking) {
-                $allStatusZero = $relatedBookings->every(function ($relatedBooking) {
-                    return $relatedBooking->status == "0";
-                });
-
-                if ($allStatusZero) {
-                    $AccreditationMasterBooking->bookings = $relatedBookings;
-                    return response()->json([
-                        'status' => true,
-                        'is_master' => true,
-                        'bookings' => $AccreditationMasterBooking,
-                        'attendee_required' => $event->Category->attendy_required ?? false,
-                        'event' => $event,
-                        'type' => "Agent"
-                    ], 200);
-                } else {
-                    return response()->json([
-                        'status' => false,
-                        'message' => 'Already Scanned',
-                        'time' => $AccreditationMasterBooking->updated_at
-                    ], 400);
-                }
-            } elseif ($SponsorMasterBooking) {
-                $allStatusZero = $relatedBookings->every(function ($relatedBooking) {
-                    return $relatedBooking->status == "0";
-                });
-
-                if ($allStatusZero) {
-                    $SponsorMasterBooking->bookings = $relatedBookings;
-                    return response()->json([
-                        'status' => true,
-                        'is_master' => true,
-                        'bookings' => $SponsorMasterBooking,
-                        'attendee_required' => $event->Category->attendy_required ?? false,
-                        'event' => $event,
-                        'type' => "Agent"
-                    ], 200);
-                } else {
-                    return response()->json([
-                        'status' => false,
-                        'message' => 'Already Scanned',
-                        'time' => $SponsorMasterBooking->updated_at
-                    ], 400);
-                }
+            if ($allStatusZero) {
+                $masterBookings->bookings = $relatedBookings;
+                return response()->json([
+                    'status' => true,
+                    'is_master' => true,
+                    'bookings' => $masterBookings,
+                    'attendee_required' => $event->Category->attendy_required ?? false,
+                    'event' => $event,
+                    'type' => "Online"
+                ], 200);
             } else {
+                // Check if any individual ticket was scanned
+                $scannedBooking = $relatedBookings->where('status', '!=', '0')->sortByDesc('updated_at')->first();
+                $allScanned = $relatedBookings->every(function ($relatedBooking) {
+                    return $relatedBooking->status != "0";
+                });
+
                 return response()->json([
                     'status' => false,
-                    'message' => 'No booking found'
-                ], 404);
+                    'message' => $allScanned ? 'Already Scanned' : 'Already scanned individually',
+                    'time' => $scannedBooking->updated_at ?? $masterBookings->updated_at
+                ], 400);
             }
+        } elseif ($amusementMasterBookings) {
+            $allStatusZero = $relatedBookings->every(function ($relatedBooking) {
+                return $relatedBooking->status == "0";
+            });
+
+            if ($allStatusZero) {
+                $amusementMasterBookings->bookings = $relatedBookings;
+                return response()->json([
+                    'status' => true,
+                    'is_master' => true,
+                    'bookings' => $amusementMasterBookings,
+                    'attendee_required' => $event->Category->attendy_required ?? false,
+                    'event' => $event,
+                    'type' => "Online"
+                ], 200);
+            } else {
+                $scannedBooking = $relatedBookings->where('status', '!=', '0')->sortByDesc('updated_at')->first();
+                $allScanned = $relatedBookings->every(function ($relatedBooking) {
+                    return $relatedBooking->status != "0";
+                });
+
+                return response()->json([
+                    'status' => false,
+                    'message' => $allScanned ? 'Already Scanned' : 'Already scanned individually',
+                    'time' => $scannedBooking->updated_at ?? $amusementMasterBookings->updated_at
+                ], 400);
+            }
+        } elseif ($agentMasterBookings) {
+            $allStatusZero = $relatedBookings->every(function ($relatedBooking) {
+                return $relatedBooking->status == "0";
+            });
+
+            if ($allStatusZero) {
+                $agentMasterBookings->bookings = $relatedBookings;
+                return response()->json([
+                    'status' => true,
+                    'is_master' => true,
+                    'bookings' => $agentMasterBookings,
+                    'attendee_required' => $event->Category->attendy_required ?? false,
+                    'event' => $event,
+                    'type' => "Agent"
+                ], 200);
+            } else {
+                $scannedBooking = $relatedBookings->where('status', '!=', '0')->sortByDesc('updated_at')->first();
+                $allScanned = $relatedBookings->every(function ($relatedBooking) {
+                    return $relatedBooking->status != "0";
+                });
+
+                return response()->json([
+                    'status' => false,
+                    'message' => $allScanned ? 'Already Scanned' : 'Already scanned individually',
+                    'time' => $scannedBooking->updated_at ?? $agentMasterBookings->updated_at
+                ], 400);
+            }
+        } elseif ($AccreditationMasterBooking) {
+            $allStatusZero = $relatedBookings->every(function ($relatedBooking) {
+                return $relatedBooking->status == "0";
+            });
+
+            if ($allStatusZero) {
+                $AccreditationMasterBooking->bookings = $relatedBookings;
+                return response()->json([
+                    'status' => true,
+                    'is_master' => true,
+                    'bookings' => $AccreditationMasterBooking,
+                    'attendee_required' => $event->Category->attendy_required ?? false,
+                    'event' => $event,
+                    'type' => "Agent"
+                ], 200);
+            } else {
+                $scannedBooking = $relatedBookings->where('status', '!=', '0')->sortByDesc('updated_at')->first();
+                $allScanned = $relatedBookings->every(function ($relatedBooking) {
+                    return $relatedBooking->status != "0";
+                });
+
+                return response()->json([
+                    'status' => false,
+                    'message' => $allScanned ? 'Already Scanned' : 'Already scanned individually',
+                    'time' => $scannedBooking->updated_at ?? $AccreditationMasterBooking->updated_at
+                ], 400);
+            }
+        } elseif ($SponsorMasterBooking) {
+            $allStatusZero = $relatedBookings->every(function ($relatedBooking) {
+                return $relatedBooking->status == "0";
+            });
+
+            if ($allStatusZero) {
+                $SponsorMasterBooking->bookings = $relatedBookings;
+                return response()->json([
+                    'status' => true,
+                    'is_master' => true,
+                    'bookings' => $SponsorMasterBooking,
+                    'attendee_required' => $event->Category->attendy_required ?? false,
+                    'event' => $event,
+                    'type' => "Agent"
+                ], 200);
+            } else {
+                $scannedBooking = $relatedBookings->where('status', '!=', '0')->sortByDesc('updated_at')->first();
+                $allScanned = $relatedBookings->every(function ($relatedBooking) {
+                    return $relatedBooking->status != "0";
+                });
+
+                return response()->json([
+                    'status' => false,
+                    'message' => $allScanned ? 'Already Scanned' : 'Already scanned individually',
+                    'time' => $scannedBooking->updated_at ?? $SponsorMasterBooking->updated_at
+                ], 400);
+            }
+        } else {
+            return response()->json([
+                'status' => false,
+                'message' => 'No booking found'
+            ], 404);
+        }
         } catch (\Exception $e) {
             // Handle unexpected errors
             return response()->json([
@@ -544,7 +571,7 @@ class ScanController extends Controller
             }
             $booking->is_scaned = true;
             $booking->save();
-          //  $history = $this->logScanHistory($booking->user_id, auth()->id(), $booking->token, 'online');
+           // $history = $this->logScanHistory($booking->user_id, auth()->id(), $booking->token, 'online');
             return response()->json([
                 'status' => true,
                 'bookings' => $booking->status
@@ -571,7 +598,7 @@ class ScanController extends Controller
             // $agentBooking->status = true;
             $agentBooking->is_scaned = true;
             $agentBooking->save();
-          //  $history = $this->logScanHistory($agentBooking->user_id, auth()->id(), $agentBooking->token, 'agentBooking');
+            //$history = $this->logScanHistory($agentBooking->user_id, auth()->id(), $agentBooking->token, 'agentBooking');
             return response()->json([
                 'status' => true,
                 'bookings' => $agentBooking->status
@@ -585,7 +612,7 @@ class ScanController extends Controller
             // $agentBooking->status = true;
             $AccreditationBooking->is_scaned = true;
             $AccreditationBooking->save();
-          //  $history = $this->logScanHistory($AccreditationBooking->user_id, auth()->id(), $AccreditationBooking->token, 'AccreditationBooking');
+           // $history = $this->logScanHistory($AccreditationBooking->user_id, auth()->id(), $AccreditationBooking->token, 'AccreditationBooking');
             return response()->json([
                 'status' => true,
                 'bookings' => $AccreditationBooking->status
@@ -599,7 +626,7 @@ class ScanController extends Controller
             // $agentBooking->status = true;
             $SponsorBooking->is_scaned = true;
             $SponsorBooking->save();
-          //  $history = $this->logScanHistory($SponsorBooking->user_id, auth()->id(), $SponsorBooking->token, 'SponsorBooking');
+            //$history = $this->logScanHistory($SponsorBooking->user_id, auth()->id(), $SponsorBooking->token, 'SponsorBooking');
 
             return response()->json([
                 'status' => true,
@@ -614,7 +641,7 @@ class ScanController extends Controller
             // $amusementAgentBooking->status = true;
             $amusementAgentBooking->is_scaned = true;
             $amusementAgentBooking->save();
-         //   $history = $this->logScanHistory($amusementAgentBooking->user_id, auth()->id(), $amusementAgentBooking->token, 'amusementAgentBooking');
+            //$history = $this->logScanHistory($amusementAgentBooking->user_id, auth()->id(), $amusementAgentBooking->token, 'amusementAgentBooking');
 
             return response()->json([
                 'status' => true,
@@ -629,7 +656,7 @@ class ScanController extends Controller
             // $ExhibitionBooking->status = true;
             $ExhibitionBooking->is_scaned = true;
             $ExhibitionBooking->save();
-          //  $history = $this->logScanHistory($ExhibitionBooking->user_id, auth()->id(), $ExhibitionBooking->token, 'ExhibitionBooking');
+            //$history = $this->logScanHistory($ExhibitionBooking->user_id, auth()->id(), $ExhibitionBooking->token, 'ExhibitionBooking');
 
             return response()->json([
                 'status' => true,
@@ -644,7 +671,7 @@ class ScanController extends Controller
             $posBooking->is_scaned = true;
             $posBooking->status = true;
             $posBooking->save();
-          //  $history = $this->logScanHistory($posBooking->user_id, auth()->id(), $posBooking->token, 'posBooking');
+            //$history = $this->logScanHistory($posBooking->user_id, auth()->id(), $posBooking->token, 'posBooking');
 
             return response()->json([
                 'status' => true,
@@ -673,7 +700,7 @@ class ScanController extends Controller
             }
             $amusementPosBooking->is_scaned = true;
             $amusementPosBooking->save();
-          //  $history = $this->logScanHistory($amusementPosBooking->user_id, auth()->id(), $amusementPosBooking->token, 'amusementPosBooking');
+            //$history = $this->logScanHistory($amusementPosBooking->user_id, auth()->id(), $amusementPosBooking->token, 'amusementPosBooking');
 
             return response()->json([
                 'status' => true,
@@ -687,7 +714,7 @@ class ScanController extends Controller
             }
             $complimentaryBookings->is_scaned = true;
             $complimentaryBookings->save();
-          //  $history = $this->logScanHistory($complimentaryBookings->user_id, auth()->id(), $complimentaryBookings->token, 'complimentaryBookings');
+            //$history = $this->logScanHistory($complimentaryBookings->user_id, auth()->id(), $complimentaryBookings->token, 'complimentaryBookings');
 
             return response()->json([
                 'status' => true,
@@ -710,7 +737,7 @@ class ScanController extends Controller
                 }
                 $relatedBooking->is_scaned = true;
                 $relatedBooking->save();
-              //  $history = $this->logScanHistory($relatedBooking->user_id, auth()->id(), $masterBookings->order_id, 'masterBookings');
+                //$history = $this->logScanHistory($relatedBooking->user_id, auth()->id(), $masterBookings->order_id, 'masterBookings');
             }
             return response()->json([
                 'status' => true,
@@ -732,7 +759,7 @@ class ScanController extends Controller
                 }
                 $relatedBooking->is_scaned = true;
                 $relatedBooking->save();
-              //  $history = $this->logScanHistory($relatedBooking->user_id, auth()->id(), $amusementMasterBookings->order_id, 'amusementMasterBookings');
+               // $history = $this->logScanHistory($relatedBooking->user_id, auth()->id(), $amusementMasterBookings->order_id, 'amusementMasterBookings');
             }
             return response()->json([
                 'status' => true,
@@ -756,7 +783,7 @@ class ScanController extends Controller
                 }
                 $relatedBooking->is_scaned = true;
                 $relatedBooking->save();
-              //  $history = $this->logScanHistory($relatedBooking->user_id, auth()->id(), $agentMasterBookings->order_id, 'agentMasterBookings');
+               // $history = $this->logScanHistory($relatedBooking->user_id, auth()->id(), $agentMasterBookings->order_id, 'agentMasterBookings');
             }
             return response()->json([
                 'status' => 'true',
@@ -778,7 +805,7 @@ class ScanController extends Controller
                 }
                 $relatedBooking->is_scaned = true;
                 $relatedBooking->save();
-              //  $history = $this->logScanHistory($relatedBooking->user_id, auth()->id(), $AccreditationMasterBooking->order_id, 'AccreditationMasterBooking');
+                //$history = $this->logScanHistory($relatedBooking->user_id, auth()->id(), $AccreditationMasterBooking->order_id, 'AccreditationMasterBooking');
             }
             return response()->json([
                 'status' => 'true',
@@ -800,7 +827,7 @@ class ScanController extends Controller
                 }
                 $relatedBooking->is_scaned = true;
                 $relatedBooking->save();
-               // $history = $this->logScanHistory($relatedBooking->user_id, auth()->id(), $SponsorMasterBooking->order_id, 'SponsorMasterBooking');
+                //$history = $this->logScanHistory($relatedBooking->user_id, auth()->id(), $SponsorMasterBooking->order_id, 'SponsorMasterBooking');
             }
             return response()->json([
                 'status' => 'true',
@@ -1078,7 +1105,7 @@ class ScanController extends Controller
                 $attendee->status = true;
                 $attendee->save();
 
-               // $this->logScanHistory($attendee->user_id, auth()->id(), $attendee->token, 'attendee');
+                //$this->logScanHistory($attendee->user_id, auth()->id(), $attendee->token, 'attendee');
 
                 return response()->json([
                     'status' => true,
@@ -1094,7 +1121,7 @@ class ScanController extends Controller
                 $corporate->status = true;
                 $corporate->save();
 
-              //  $this->logScanHistory($corporate->user_id, auth()->id(), $corporate->token, 'corporate');
+                // $this->logScanHistory($corporate->user_id, auth()->id(), $corporate->token, 'corporate');
 
                 return response()->json([
                     'status' => true,

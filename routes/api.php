@@ -22,6 +22,7 @@ use App\Http\Controllers\CategoryController;
 use App\Http\Controllers\CommissionController;
 use App\Http\Controllers\ComplimentaryBookingController;
 use App\Http\Controllers\ContactUsController;
+use App\Http\Controllers\ContentMasterController;
 use App\Http\Controllers\CorporateBookingController;
 use App\Http\Controllers\CorporateUserController;
 use App\Http\Controllers\DashboardController;
@@ -144,10 +145,11 @@ Route::middleware(['restrict.ip'])->group(function () {
     Route::get('tickets/{id}', [TicketController::class, 'index']);
     Route::get('org-events/{organisation}', [EventController::class, 'landingOrgId']);
 
-    Route::middleware(['auth:api'])->group(function () {
+    Route::middleware(['auth:api', 'check.status'])->group(function () {
         Route::get('verify-user-settion', [AuthController::class, 'verifyUserSession']);
         //Dashboard routes
         Route::get('/bookingCount/{id}', [DashboardController::class, 'BookingCounts']);
+        Route::get('/gateway-wise-sales', [DashboardController::class, 'gatewayWiseSales']);
         Route::get('/calculateSale/{id}', [DashboardController::class, 'calculateSale']);
         Route::get('org/dashbord', [DashboardController::class, 'organizerWeeklyReport']);
         Route::get('/getDashboardSummary/{type}', [DashboardController::class, 'getDashboardSummary']);
@@ -157,7 +159,7 @@ Route::middleware(['restrict.ip'])->group(function () {
         Route::delete('/flush-payment-log', [DashboardController::class, 'PaymentLogDelet']);
 
         Route::get('login-history', [LoginHistoryController::class, 'index'])->middleware('permission:View Login History');
-        Route::get('/gateway-wise-sales', [DashboardController::class, 'gatewayWiseSales']);
+
         // Route::get('/getAllData/{id}', [DashboardController::class, 'getAllData']);
 
         Route::post('/create-role', [RolePermissionController::class, 'createRole'])->middleware('permission:Create Role');
@@ -265,7 +267,7 @@ Route::middleware(['restrict.ip'])->group(function () {
         Route::post('pendding-booking/{id}', [BookingController::class, 'penddingBooking']);
 
         //amusement
-        Route::get('amusement-bookings/{id}', [AmusementBookingController::class, 'onlineBookings']);
+        Route::get('amusement-bookings/{id}', [AmusementBookingController::class,  'onlineBookings']);
 
         //amusement agent booking
         // Route::get('amusement-agents-bookings/{id}', [AmusementAgentBookingController::class, 'agentAmusementBooking']);
@@ -386,6 +388,14 @@ Route::middleware(['restrict.ip'])->group(function () {
         Route::post('/store-phonepe', [PaymentGatewayController::class, 'storePhonePe']);
         Route::post('/store-cashfree', [PaymentGatewayController::class, 'storeCashfree']);
         Route::post('/test', [PaymentGatewayController::class, 'initiatePayment']);
+
+        // Content Master
+        Route::get('content-master', [ContentMasterController::class, 'index']);
+        Route::post('content-master', [ContentMasterController::class, 'store']);
+        Route::get('content-master/{id}', [ContentMasterController::class, 'show']);
+        Route::post('content-master/{id}', [ContentMasterController::class, 'update']);
+        Route::delete('content-master/{id}', [ContentMasterController::class, 'destroy']);
+        Route::get('content-master/user/{userId}', [ContentMasterController::class, 'getByUser']);
 
         //complimentary
         // Route to store new complimentary bookings

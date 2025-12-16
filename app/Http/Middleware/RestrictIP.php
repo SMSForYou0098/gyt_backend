@@ -13,8 +13,15 @@ class RestrictIP
      * @var array
      */
     protected $allowedDomains = [
-        'getyourticket.in',
-            	'www.getyourticket.in','mercury-t2.phonepe.com','192.168.0.141','www.cashfree.com','api.cashfree.com','razorpay.com','api.razorpay.com','getyourticket.in',
+      'getyourticket.in',
+      'www.getyourticket.in',
+      'mercury-t2.phonepe.com',
+      '192.168.0.126',
+      'www.cashfree.com',
+      'api.cashfree.com',
+      'razorpay.com',
+      'api.razorpay.com',
+      'getyourticket.in',
     ];
 	protected $allowedIps = [
         '111.125.194.83',
@@ -41,7 +48,7 @@ class RestrictIP
 
         // Fix the syntax error and logic
         $ipAllowed = in_array($ip, $this->allowedIps);
-        $domainAllowed = empty($refererDomain) || in_array($refererDomain, $this->allowedDomains);
+        $domainAllowed = !empty($refererDomain) && in_array($refererDomain, $this->allowedDomains);
 
         if (!$ipAllowed && !$domainAllowed) {
             \Log::warning("Access denied - IP allowed: " . ($ipAllowed ? 'yes' : 'no') . ", Domain allowed: " . ($domainAllowed ? 'yes' : 'no'));

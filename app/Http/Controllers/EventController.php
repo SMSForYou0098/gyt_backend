@@ -307,75 +307,75 @@ class EventController extends Controller
     }
 
    public function eventList($id)
-{
-    $loggedInUser = Auth::user()->load('reportingUser');
-    $today = Carbon::today()->toDateString();
+    {
+        $loggedInUser = Auth::user()->load('reportingUser');
+        $today = Carbon::today()->toDateString();
 
-    if ($loggedInUser->hasRole('Admin')) {
-        $eventsQuery = Event::query();
-    } else {
-        $reporting_user = $loggedInUser->reportingUser;
+        if ($loggedInUser->hasRole('Admin')) {
+            $eventsQuery = Event::query();
+        } else {
+            $reporting_user = $loggedInUser->reportingUser;
 
-        if ($reporting_user) {
-            // reporting_user છે
-            $reporting_userAdmin = $reporting_user->roles->pluck('name')->first();
+            if ($reporting_user) {
+                // reporting_user છે
+                $reporting_userAdmin = $reporting_user->roles->pluck('name')->first();
 
-            if ($reporting_userAdmin == 'Admin' || $reporting_userAdmin == 'Organizer') {
+                if ($reporting_userAdmin == 'Admin' || $reporting_userAdmin == 'Organizer') {
+                    $eventsQuery = Event::where('user_id', $loggedInUser->id);
+                } else {
+                    $eventsQuery = Event::where('user_id', $loggedInUser->id)
+                        ->orWhere('user_id', $reporting_user->id);
+                }
+            } else {
+                // Organizer કે જેનો reporting_user નથી
                 $eventsQuery = Event::where('user_id', $loggedInUser->id);
-            } else {
-                $eventsQuery = Event::where('user_id', $loggedInUser->id)
-                    ->orWhere('user_id', $reporting_user->id);
-            }
-        } else {
-            // Organizer કે જેનો reporting_user નથી
-            $eventsQuery = Event::where('user_id', $loggedInUser->id);
-        }
-    }
-
-    $events = $eventsQuery
-        ->select('id', 'user_id', 'category', 'name', 'date_range', 'created_at', 'event_type', 'event_key', 'status')
-        ->with([
-            'tickets:id,event_id,price,sale_price',
-            'user:id,name',
-            'Category:id,title'
-        ])
-        ->orderBy('created_at', 'desc')
-        ->get();
-
-    // Process events
-    foreach ($events as $event) {
-        $dateRange = explode(',', $event->date_range);
-
-        if (count($dateRange) == 1) {
-            $eventDate = Carbon::parse(trim($dateRange[0]));
-
-            if ($today == $eventDate->toDateString()) {
-                $event->event_status = 1; // Ongoing
-            } elseif ($today < $eventDate->toDateString()) {
-                $event->event_status = 2; // Upcoming
-            } else {
-                $event->event_status = 3; // Past
-            }
-        } else {
-            $startDate = Carbon::parse(trim($dateRange[0]));
-            $endDate = Carbon::parse(trim($dateRange[1]));
-
-            if ($today >= $startDate->toDateString() && $today <= $endDate->toDateString()) {
-                $event->event_status = 1; // Ongoing
-            } elseif ($today < $startDate->toDateString()) {
-                $event->event_status = 2; // Upcoming
-            } else {
-                $event->event_status = 3; // Past
             }
         }
 
-        // Get the lowest ticket price
-        $event->lowest_ticket_price = $event->tickets->min('price') ?? 0;
-        $event->lowest_sale_price = $event->tickets->min('sale_price') ?? 0;
-    }
+        $events = $eventsQuery
+            ->select('id', 'user_id', 'category', 'name', 'date_range', 'created_at', 'event_type', 'event_key', 'status')
+            ->with([
+                'tickets:id,event_id,price,sale_price',
+                'user:id,name',
+                'Category:id,title'
+            ])
+            ->orderBy('created_at', 'desc')
+            ->get();
 
-    return response()->json(['status' => true, 'events' => $events], 200);
-}
+        // Process events
+        foreach ($events as $event) {
+            $dateRange = explode(',', $event->date_range);
+
+            if (count($dateRange) == 1) {
+                $eventDate = Carbon::parse(trim($dateRange[0]));
+
+                if ($today == $eventDate->toDateString()) {
+                    $event->event_status = 1; // Ongoing
+                } elseif ($today < $eventDate->toDateString()) {
+                    $event->event_status = 2; // Upcoming
+                } else {
+                    $event->event_status = 3; // Past
+                }
+            } else {
+                $startDate = Carbon::parse(trim($dateRange[0]));
+                $endDate = Carbon::parse(trim($dateRange[1]));
+
+                if ($today >= $startDate->toDateString() && $today <= $endDate->toDateString()) {
+                    $event->event_status = 1; // Ongoing
+                } elseif ($today < $startDate->toDateString()) {
+                    $event->event_status = 2; // Upcoming
+                } else {
+                    $event->event_status = 3; // Past
+                }
+            }
+
+            // Get the lowest ticket price
+            $event->lowest_ticket_price = $event->tickets->min('price') ?? 0;
+            $event->lowest_sale_price = $event->tickets->min('sale_price') ?? 0;
+        }
+
+        return response()->json(['status' => true, 'events' => $events], 200);
+    }
 
     // public function eventList($id)
     // {
@@ -616,6 +616,7 @@ class EventController extends Controller
     // }
     public function eventByUser(Request $request, $id)
     {
+        
         $bookingType = $request->type;
         $loggedInUser = Auth::user();
         $today = Carbon::today()->toDateString();

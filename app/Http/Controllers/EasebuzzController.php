@@ -283,12 +283,8 @@ class EasebuzzController extends Controller
                 $utr = $paymentDetails['rail']['utr'];
             }
 
-            // For PhonePe, we need to extract session ID from merchantOrderId
-            // Assuming merchantOrderId format is like: TXN_1754388795_W47jk0
-            // We need to map this to session_id somehow
             $sessionId = $this->extractSessionFromMerchantOrderId($merchantOrderId);
 
-            // Determine category (you may need to adjust this based on your implementation)
             $category = $this->determineCategoryFromMerchantOrderId($merchantOrderId);
 
             return [
@@ -313,8 +309,7 @@ class EasebuzzController extends Controller
     // Helper method to extract session ID from merchant order ID
     private function extractSessionFromMerchantOrderId($merchantOrderId)
     {
-        // This depends on how you store the relationship between merchantOrderId and session_id
-        // Option 1: If you store it in pending bookings
+
         $pendingBooking = PenddingBooking::where('txnid', $merchantOrderId)->first();
         if ($pendingBooking) {
             return $pendingBooking->session_id;
@@ -333,80 +328,7 @@ class EasebuzzController extends Controller
         return null;
     }
 
-    // Add this private method to extract Razorpay webhook data
-    // private function extractRazorpayWebhookData($request)
-    // {
-    //     try {
-    //         $params = $request->all();
 
-    //         // Check if it's a Razorpay webhook structure
-    //         if (!isset($params['event']) || !isset($params['payload'])) {
-    //             throw new \Exception('Invalid Razorpay webhook structure');
-    //         }
-
-    //         $event = $params['event'];
-    //         $payload = $params['payload'];
-
-    //         // Handle different Razorpay events
-    //         $paymentId = null;
-    //         $orderId = null;
-    //         $amount = null;
-    //         $status = null;
-    //         $method = 'razorpay';
-    //         $sessionId = null;
-    //         $category = null;
-
-    //         if ($event === 'payment_link.paid') {
-    //             // Extract from payment_link.paid webhook structure
-    //             $paymentLink = $payload['payment_link']['entity'] ?? null;
-    //             $payment = $payload['payment']['entity'] ?? null;
-    //             $order = $payload['order']['entity'] ?? null;
-
-    //             if (!$paymentLink || !$payment) {
-    //                 throw new \Exception('Missing payment_link or payment entity in webhook payload');
-    //             }
-
-    //             $paymentId = $payment['id'] ?? null;
-    //             $orderId = $payment['order_id'] ?? ($order['id'] ?? null);
-    //             $amount = ($payment['amount'] ?? 0) / 100; // Convert paise to rupees
-    //             $status = $payment['status'] ?? null;
-    //             $method = $payment['method'] ?? 'razorpay';
-
-    //             // Extract session ID from callback_url
-    //             $callbackUrl = $paymentLink['callback_url'] ?? null;
-    //             if ($callbackUrl) {
-    //                 $sessionId = $this->extractSessionFromCallbackUrl($callbackUrl);
-    //                 $category = $this->extractCategoryFromCallbackUrl($callbackUrl);
-    //             }
-    //         } else {
-    //             Log::info("Razorpay webhook event '{$event}' ignored - only processing payment.captured and payment_link.paid");
-    //             throw new \Exception("Event '{$event}' not supported for booking processing");
-    //         }
-
-    //         // Determine booking status
-    //         $bookingStatus = 'unknown';
-    //         if ($status === 'captured') {
-    //             $bookingStatus = 'success';
-    //         } else {
-    //             $bookingStatus = 'failed';
-    //         }
-
-    //         return [
-    //             'payment_id' => $paymentId,
-    //             'session_id' => $sessionId,
-    //             'category' => $category,
-    //             'status' => $bookingStatus,
-    //             'amount' => $amount,
-    //             'method' => $method,
-    //             'order_id' => $orderId,
-    //             'event' => $event,
-    //             'raw_payload' => $params
-    //         ];
-    //     } catch (\Exception $e) {
-    //         Log::error('Razorpay webhook data extraction failed: ' . $e->getMessage());
-    //         throw $e;
-    //     }
-    // }
     private function extractRazorpayWebhookData($request)
     {
         try {
@@ -492,9 +414,7 @@ class EasebuzzController extends Controller
     private function extractSessionFromCallbackUrl($callbackUrl)
     {
         try {
-            // Parse the callback URL to extract session ID
-            // Format: https://gyt.tieconvadodara.com/api/payment-response/razorpay/AA00002/eob7OmzWBCtq5Vb3hzqyfQPezysx3Bsq?status=success&category=Business Confrence
-
+        
             $parsedUrl = parse_url($callbackUrl);
             if (!$parsedUrl || !isset($parsedUrl['path'])) {
                 throw new \Exception('Invalid callback URL format');
@@ -503,8 +423,6 @@ class EasebuzzController extends Controller
             // Extract path segments
             $pathSegments = explode('/', trim($parsedUrl['path'], '/'));
 
-            // Find the session ID (should be the last segment before query parameters)
-            // Expected path: /api/payment-response/razorpay/{event_id}/{session_id}
             if (count($pathSegments) >= 4) {
                 $sessionId = end($pathSegments); // Get the last segment
 
@@ -555,10 +473,6 @@ class EasebuzzController extends Controller
         }
     }
 
-
-
-
-
     // Helper method to determine category from merchant order ID
     private function determineCategoryFromMerchantOrderId($merchantOrderId)
     {
@@ -581,16 +495,6 @@ class EasebuzzController extends Controller
     // Update the main handleWebhook method
     public function handleWebhook(Request $request, $gateway)
     {
-        // $response = Http::post("https://dark.getyourticket.in/api/dark/payment-webhook/{$gateway}/vod", $request->all());
-        //$response = Http::post("https://dark.getyourticket.in/api/dark/payment-webhook/{$gateway}/vod", $request->all());
-
-        //     return response()->json([
-        //         'status' => $response->successful(),
-        //         'message' => 'Webhook forwarded',
-        //         'response' => $response->json(),
-        //     ]);
-
-        // Log::info("[$gateway] Webhook received:", $request->all());
 
         try {
             $params = $request->all();
@@ -971,6 +875,7 @@ class EasebuzzController extends Controller
         $booking->convenience_fee = $data->convenience_fee ?? NULL;
         $booking->attendee_id = $data->attendee_id ?? $request->attendees[0]['id'] ?? NULL;
         $booking->total_tax = $data->total_tax ?? NULL;
+        $booking->booking_type = 'online';
         $booking->save();
         $booking->load(['user', 'ticket.event', 'attendee']);
         if (isset($booking->promocode_id)) {
@@ -1055,29 +960,6 @@ class EasebuzzController extends Controller
     private function bookingData($data, $paymentId)
     {
 
-        // // Build query more safely
-        // $query = Booking::query();
-
-        // if ($paymentId) {
-        //     $query->where('payment_id', $paymentId);
-        // }
-
-        // if (!empty($data->session_id) || !empty($data->token)) {
-        //     $query->where(function ($q) use ($data) {
-        //         if (!empty($data->session_id)) {
-        //             $q->orWhere('session_id', $data->session_id);
-        //         }
-        //         if (!empty($data->token)) {
-        //             $q->orWhere('token', $data->token);
-        //         }
-        //     });
-        // }
-
-        // $exists = $query->first();
-
-        // if ($exists) {
-        //     return false;
-        // }
         $booking = new Booking();
         $booking->ticket_id = $data->ticket_id;
         $booking->batch_id = Ticket::where('id', $data->ticket_id)->value('batch_id');
@@ -1103,6 +985,7 @@ class EasebuzzController extends Controller
         $booking->convenience_fee = $data->convenience_fee;
         $booking->attendee_id = $data->attendee_id;
         $booking->total_tax = $data->total_tax;
+        $booking->booking_type = 'online';
         $booking->save();
         if (isset($booking->promocode_id)) {
             $promocode = Promocode::where('code', $booking->promocode_id)->first();
@@ -1313,12 +1196,6 @@ class EasebuzzController extends Controller
         if ($bookings->isNotEmpty()) {
             foreach ($bookings as $individualBooking) {
                 if ($status === 'success') {
-                    $alreadyExists = Booking::where('token', $individualBooking->token)->exists();
-
-                    if ($alreadyExists) {
-                        $individualBooking->delete();
-                        continue;
-                    }
                     $booking = $this->bookingData($individualBooking, $paymentId);
                     if ($booking) {
                         $masterBookingIDs[] = $booking->id;
@@ -1330,24 +1207,11 @@ class EasebuzzController extends Controller
                 } else {
                     $individualBooking->payment_status = $status;
                 }
-                if ($individualBooking->exists) {
-                    $individualBooking->save();
-                }
+                $individualBooking->save();
             }
         }
 
         if ($bookingMaster->isNotEmpty() && $status === 'success') {
-            $existsMaster = MasterBooking::where('session_id', $decryptedSessionId)
-                ->where('order_id', $orderId)
-                ->exists();
-
-            if ($existsMaster) {
-                \DB::commit();
-                return response()->json([
-                    'status' => true,
-                    'message' => 'Master booking already exists, duplicate skipped.'
-                ], 200);
-            }
             $updated = $this->updateMasterBooking($bookingMaster, $masterBookingIDs, $paymentId);
             if ($updated) {
                 $bookingMaster->each->delete();
@@ -1480,6 +1344,7 @@ class EasebuzzController extends Controller
                     $booking->type = $requestData->type;
                     $booking->payment_method = $requestData->payment_method;
                     $booking->gateway = $request->gateway;
+                    $booking->booking_type = 'online';
 
                     // $booking->token = $this->generateRandomCode();
                     $booking->token = $this->generateHexadecimalCode();
@@ -1517,6 +1382,7 @@ class EasebuzzController extends Controller
                     $penddingBookingsMaster->user_id = $requestData->user_id;
                     $penddingBookingsMaster->amount = $request->amount;
                     $penddingBookingsMaster->gateway = $request->gateway;
+                    $penddingBookingsMaster->booking_type = 'online';
 
                     // $penddingBookingsMaster->order_id = $this->generateRandomCode();
                     $penddingBookingsMaster->order_id = $this->generateHexadecimalCode();
@@ -1629,6 +1495,7 @@ class EasebuzzController extends Controller
             'amount' => $booking->amount ?? 0,
             'discount' => $booking->discount,
             'payment_method' => $booking->payment_method,
+            'booking_type' => 'online',
             'created_at' => now(),
             'updated_at' => now(),
         ];
@@ -1701,17 +1568,6 @@ class EasebuzzController extends Controller
     private function updateMasterBooking($bookingMaster, $ids, $paymentId)
     {
 
-        // Safety check - minimal change
-        // if ($bookingMaster->isEmpty()) {
-        //     return false;
-        // }
-        // $exists = MasterBooking::Where('session_id', $bookingMaster->first()->session_id)
-        //     ->orWhere('order_id', $bookingMaster->first()->order_id)
-        //     ->first();
-
-        // if ($exists) {
-        //     return false;
-        // }
 
         foreach ($bookingMaster as $entry) {
             $data = [
@@ -1724,6 +1580,7 @@ class EasebuzzController extends Controller
                 'payment_method' => $entry->payment_method,
                 'gateway' => $entry->gateway,
                 'payment_id' => $paymentId,
+                'booking_type' => 'online',
                 'created_at' => now(),
                 'updated_at' => now(),
             ];

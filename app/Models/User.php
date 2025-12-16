@@ -48,7 +48,7 @@ class User extends Authenticatable
     ];
 
 
-    public function orgType()
+ public function orgType()
     {
         return $this->belongsTo(Query::class, 'org_type_of_company', 'id');
     }
@@ -150,7 +150,7 @@ class User extends Authenticatable
         return $this->hasMany(Event::class, 'user_id'); // adjust if key name differs
     }
 
-    public function latestLoginHistory()
+      public function latestLoginHistory()
     {
         return $this->hasOne(LoginHistory::class, 'user_id')->latest();
     }

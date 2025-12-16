@@ -47,13 +47,14 @@ class PhonePeController extends Controller
                 'user_id' => 'required|string',
                 'mobile_number' => 'nullable|string|size:10',
             ]);
-
-             $adminConfig = PhonePe::where('user_id', User::role('Admin')->value('id'))->first();
-            //  $config = PhonePe::where('user_id', $request->organizer_id)->firstOrFail();
+             
+             $adminConfig = PhonePe::where('user_id', User::role('Admin')->value('id'))->firstOrFail();
+             //return $adminConfig;
+             //$config = PhonePe::where('user_id', $request->organizer_id)->firstOrFail();
+          	
+             
              $clientId =  $adminConfig->client_id;
-             $clientSecret = $adminConfig->secret;
-             //  $clientSecret = $config->client_secret ?? $adminConfig->secret;
-            //  $clientId = $config->client_id ?? $adminConfig->client_id;
+             $clientSecret =  $adminConfig->secret;
           
             $gateway = 'phonepe';
             $getSession = $this->generateEncryptedSessionId();

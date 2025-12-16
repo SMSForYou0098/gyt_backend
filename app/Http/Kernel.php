@@ -74,5 +74,6 @@ class Kernel extends HttpKernel
         'restrict.payment' => \App\Http\Middleware\RestrictPaymentResponse::class,
         'device.info' => \App\Http\Middleware\DeviceInfoMiddleware::class,
         'permission' => \App\Http\Middleware\CheckPermission::class,
+        'check.status' => \App\Http\Middleware\CheckUserStatus::class,
     ];
 }
