@@ -27,7 +27,7 @@ use App\Services\PermissionService;
 class AgentController extends Controller
 {
 
-    public function list(Request $request, $id, PermissionService $permissionService)
+    public function list(Request $request,  $type, $id, PermissionService $permissionService)
     {
         try {
             $loggedInUser = Auth::user();
@@ -51,11 +51,11 @@ class AgentController extends Controller
             }
 
             // Get master bookings
-            $masterQuery = AgentMaster::withTrashed()
-                ->whereBetween('created_at', [$startDate, $endDate]);
+            $masterQuery = MasterBooking::withTrashed()
+                ->whereBetween('created_at', [$startDate, $endDate])->where('booking_type', $type);
 
             if ($loggedInUser->hasRole('Agent')) {
-                $masterQuery->where('agent_id', $loggedInUser->id);
+                $masterQuery->where('booking_by', $loggedInUser->id);
             }
 
             $Masterbookings = $masterQuery->get();
@@ -66,7 +66,7 @@ class AgentController extends Controller
                     if (is_array($master->booking_id)) {
                         // Check if any booking in this master belongs to organizer's events
                         $bookingIds = $master->booking_id;
-                        $belongsToOrganizer = Agent::whereIn('id', $bookingIds)
+                        $belongsToOrganizer = Booking::whereIn('id', $bookingIds)
                             ->whereIn('ticket_id', $organizerTicketIds)
                             ->exists();
                         return $belongsToOrganizer;
@@ -80,9 +80,10 @@ class AgentController extends Controller
             })->unique()->values();
 
             // Pre-fetch all agent bookings for master bookings
-            $agentBookingsCollection = Agent::withTrashed()
+            $agentBookingsCollection = Booking::withTrashed()
                 ->whereIn('id', $allBookingIds)
                 ->with(['ticket.event.user', 'user:id,name,number,email,photo,reporting_user,company_name,designation', 'agentUser:id,name'])
+                ->where('booking_type', $type)
                 ->get()->keyBy('id');
 
             // Transform master bookings
@@ -109,13 +110,14 @@ class AgentController extends Controller
             });
 
             // Get normal bookings (single bookings that are NOT part of master bookings)
-            $normalQuery = Agent::withTrashed()
+            $normalQuery = Booking::withTrashed()
                 ->with(['ticket.event.user', 'user:id,name,number,email,photo,reporting_user,company_name,designation', 'agentUser:id,name'])
                 ->whereBetween('created_at', [$startDate, $endDate])
+                ->where('booking_type', $type)
                 ->whereNotIn('id', $allBookingIds); // Exclude master booking IDs
 
             if ($loggedInUser->hasRole('Agent')) {
-                $normalQuery->where('agent_id', $loggedInUser->id);
+                $normalQuery->where('booking_by', $loggedInUser->id);
             } elseif ($loggedInUser->hasRole('Organizer') && $organizerTicketIds) {
                 $normalQuery->whereIn('ticket_id', $organizerTicketIds);
             }
@@ -150,7 +152,7 @@ class AgentController extends Controller
 
 
     //store agent
-    public function store(Request $request, $id, SmsService $smsService, WhatsappService $whatsappService)
+    public function store(Request $request, $type, $id, SmsService $smsService, WhatsappService $whatsappService)
     {
         try {
             $user = auth()->user();
@@ -192,7 +194,7 @@ class AgentController extends Controller
                     $booking->booking_by = $request->agent_id;
                     $booking->user_id = $request->user_id;
                     $booking->session_id = $sessionId;
-                    $booking->booking_type = 'agent';
+                    $booking->booking_type = $type;
 
                     $ticket = Ticket::findOrFail($request->tickets['id']);
                     $event = $ticket->event;
@@ -300,7 +302,7 @@ class AgentController extends Controller
     }
 
 
-    public function agentMaster(Request $request, $id, SmsService $smsService, WhatsappService $whatsappService)
+    public function agentMaster(Request $request,$type, $id, SmsService $smsService, WhatsappService $whatsappService)
     {
         try {
             $user = auth()->user();
@@ -346,7 +348,7 @@ class AgentController extends Controller
             $agentMasterBooking->amount = $request->amount;
             $agentMasterBooking->discount = $request->discount;
             $agentMasterBooking->payment_method = $request->payment_method;
-            $agentMasterBooking->booking_type = 'agent';
+            $agentMasterBooking->booking_type =  $type;
             $agentMasterBooking->save();
 
             if ($user->hasRole('Agent')) {
@@ -365,7 +367,7 @@ class AgentController extends Controller
                 $newBalance->save();
             }
             // Retrieve the created agent master booking
-            $agentMasterBookingDetails = AgentMaster::where('order_id', $agentMasterBooking->order_id)->with('user')->first();
+            $agentMasterBookingDetails = MasterBooking::where('order_id', $agentMasterBooking->order_id)->with('user')->first();
 
             if ($agentMasterBookingDetails) {
                 $bookingIds = $agentMasterBookingDetails->booking_id;

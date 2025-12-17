@@ -1011,12 +1011,28 @@ class BookingController extends Controller
 
     public function export(Request $request)
     {
+        $loggedInUser = Auth::user();
         $Attendee = $request->input('user_id');
         $eventName = $request->input('ticket_id');
         $status = $request->input('status');
         $dates = $request->input('date') ? explode(',', $request->input('date')) : [Carbon::today()->format('Y-m-d')];
 
-        $query = Booking::query();
+        $query = Booking::with(['userData', 'ticket.event.user']);
+
+        if ($loggedInUser->hasRole('Admin')) {
+            // Admin sees all
+        } elseif ($loggedInUser->hasRole('Organizer')) {
+            $query->whereHas('ticket.event', function ($q) use ($loggedInUser) {
+                $q->where('user_id', $loggedInUser->id);
+            });
+        } elseif ($loggedInUser->hasRole('Agent')) {
+            $query->where('agent_id', $loggedInUser->id);
+        } else {
+            return response()->json([
+                'status' => false,
+                'message' => 'Unauthorized access'
+            ], 403);
+        }
 
         if ($request->has('ticket_id')) {
             $query->where('ticket_id', $eventName);

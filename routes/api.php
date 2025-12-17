@@ -277,9 +277,9 @@ Route::middleware(['restrict.ip'])->group(function () {
         Route::get('amusement-user-form-number/{id}', [AmusementAgentBookingController::class, 'userFormNumberAmusement']);
 
         //Agent booking
-        Route::post('agent-book-ticket/{id}', [AgentController::class, 'store']);
-        Route::post('agent-master-booking/{id}', [AgentController::class, 'agentMaster']);
-        Route::get('/agents/list/{id}', [AgentController::class, 'list'])->middleware('permission:View Agent Bookings');
+        Route::post('agent-book-ticket/{type}/{id}', [AgentController::class, 'store']);
+        Route::post('agent-master-booking/{type}/{id}', [AgentController::class, 'agentMaster']);
+        Route::get('/agents/list/{type}/{id}', [AgentController::class, 'list'])->middleware('permission:View Agent Bookings');
         Route::get('user-form-number/{id}', [AgentController::class, 'userFormNumber']);
         Route::get('agent-restore-booking/{token}', [AgentController::class, 'restoreBooking']);
         Route::delete('agent-delete-booking/{token}', [AgentController::class, 'destroy']);
