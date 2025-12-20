@@ -57,7 +57,7 @@ class DashboardController extends Controller
         } else {
             // Organizer: get all users in hierarchy (recursive)
             $userIds = $this->getAllUsersUnder($loggedInUser->id);
-			//return $userIds;
+            //return $userIds;
             // Get ticket IDs from organizer's events
             $ticketIds = Event::where('user_id', $loggedInUser->id)
                 ->with('tickets')
@@ -137,7 +137,7 @@ class DashboardController extends Controller
 
         // Get direct children
         $directUsers = User::where('reporting_user', $userId)->pluck('id');
-		//return $directUsers;
+        //return $directUsers;
         if ($directUsers->isEmpty()) {
             return $userIds;
         }
@@ -1205,7 +1205,7 @@ class DashboardController extends Controller
         $cardAmount = 0;
         $totalCountScanHistory = 0;
         $todayCountScanHistory = 0;
-        
+
 
         $startDate = null;
         $endDate = null;
@@ -1225,7 +1225,7 @@ class DashboardController extends Controller
             $startDate = Carbon::today()->startOfDay();
             $endDate = Carbon::today()->endOfDay();
         }
-		$ticketSales = $this->eventWiseTicketSales($startDate, $endDate, $type);
+        $ticketSales = $this->eventWiseTicketSales($startDate, $endDate, $type);
         // Base query
         switch ($type) {
             case 'online':
@@ -1374,8 +1374,180 @@ class DashboardController extends Controller
             'ticketSales' => $ticketSales
         ]);
     }
-  
-  
+
+    // new descount code
+    // public function getDashboardSummary($type, Request $request)
+    // {
+    //     $user = auth()->user();
+
+    //     $totalAmount = 0;
+    //     $totalDiscount = 0;
+    //     $totalBookings = 0;
+    //     $totalTickets = 0;
+
+    //     $easebuzzTotalAmount = 0;
+    //     $instamojoTotalAmount = 0;
+    //     $phonepeTotalAmount = 0;
+    //     $cashfreeTotalAmount = 0;
+    //     $razorpayTotalAmount = 0;
+
+    //     $cashAmount = 0;
+    //     $upiAmount = 0;
+    //     $cardAmount = 0;
+
+    //     $totalCountScanHistory = 0;
+    //     $todayCountScanHistory = 0;
+
+    //     $ticketDiscounts = [];
+
+    //     // 📅 Date filter
+    //     if ($request->has('date')) {
+    //         $dates = explode(',', $request->date);
+
+    //         if (count($dates) === 1 || $dates[0] === $dates[1]) {
+    //             $startDate = Carbon::parse($dates[0])->startOfDay();
+    //             $endDate   = Carbon::parse($dates[0])->endOfDay();
+    //         } elseif (count($dates) === 2) {
+    //             $startDate = Carbon::parse($dates[0])->startOfDay();
+    //             $endDate   = Carbon::parse($dates[1])->endOfDay();
+    //         } else {
+    //             return response()->json(['status' => false, 'message' => 'Invalid date format'], 400);
+    //         }
+    //     } else {
+    //         $startDate = Carbon::today()->startOfDay();
+    //         $endDate   = Carbon::today()->endOfDay();
+    //     }
+
+    //     $ticketSales = $this->eventWiseTicketSales($startDate, $endDate, $type);
+
+    //     // 🔀 Base query
+    //     switch ($type) {
+
+    //         case 'online':
+    //             $query = Booking::whereBetween('created_at', [$startDate, $endDate]);
+
+    //             $easebuzzTotalAmount = (clone $query)->where('gateway', 'easebuzz')->sum('amount');
+    //             $instamojoTotalAmount = (clone $query)->where('gateway', 'instamojo')->sum('amount');
+    //             $phonepeTotalAmount  = (clone $query)->where('gateway', 'phonepe')->sum('amount');
+    //             $cashfreeTotalAmount = (clone $query)->where('gateway', 'cashfree')->sum('amount');
+    //             $razorpayTotalAmount = (clone $query)->where('gateway', 'razorpay')->sum('amount');
+    //             break;
+
+    //         case 'amusement-online':
+    //             $query = AmusementBooking::whereBetween('created_at', [$startDate, $endDate]);
+    //             break;
+
+    //         case 'agent':
+    //             $query = Agent::whereBetween('created_at', [$startDate, $endDate]);
+
+    //             if ($user->hasRole('Agent')) {
+    //                 $query->where('agent_id', $user->id);
+    //             }
+
+    //             $agentBookings = $query->get();
+    //             $cashAmount = $agentBookings->where('payment_method', 'cash')->sum('amount');
+    //             $upiAmount  = $agentBookings->where('payment_method', 'upi')->sum('amount');
+    //             $cardAmount = $agentBookings->where('payment_method', 'net banking')->sum('amount');
+    //             break;
+
+    //         case 'sponsor':
+    //             $query = SponsorBooking::whereBetween('created_at', [$startDate, $endDate]);
+    //             if ($user->hasRole('Sponsor')) {
+    //                 $query->where('sponsor_id', $user->id);
+    //             }
+    //             break;
+
+    //         case 'accreditation':
+    //             $query = AccreditationBooking::whereBetween('created_at', [$startDate, $endDate]);
+    //             if ($user->hasRole('Accreditation')) {
+    //                 $query->where('accreditation_id', $user->id);
+    //             }
+    //             break;
+
+    //         case 'pos':
+    //             $query = PosBooking::whereBetween('created_at', [$startDate, $endDate]);
+    //             if ($user->hasRole('POS')) {
+    //                 $query->where('user_id', $user->id);
+    //             }
+    //             break;
+
+    //         case 'corporate':
+    //             $query = CorporateBooking::whereBetween('created_at', [$startDate, $endDate]);
+    //             break;
+
+    //         case 'pending bookings':
+    //             $query = PenddingBooking::whereBetween('created_at', [$startDate, $endDate]);
+    //             break;
+
+    //         case 'scan history':
+    //             $totalCountScanHistory = ScanHistory::count();
+    //             $todayCountScanHistory = ScanHistory::whereBetween('created_at', [$startDate, $endDate])->count();
+    //             $query = null;
+    //             break;
+
+    //         default:
+    //             return response()->json(['error' => 'Invalid type'], 400);
+    //     }
+
+    //     // 🔐 Role-based filtering
+    //     if ($query !== null && $type !== 'agent') {
+
+    //         if ($user->hasRole('Organizer')) {
+    //             $eventIds = Event::where('user_id', $user->id)->pluck('id');
+    //             $ticketIds = Ticket::whereIn('event_id', $eventIds)->pluck('id');
+    //             $query->whereIn('ticket_id', $ticketIds);
+    //         }
+    //     }
+
+    //     // 🧮 Totals + Ticket-wise Discount
+    //     if ($query !== null) {
+
+    //         $totalAmount = $query->sum('amount');
+
+    //         $bookings = $query->with('ticket')->get();
+
+    //         foreach ($bookings as $booking) {
+    //             if (!$booking->ticket) continue;
+
+    //             $ticketName = $booking->ticket->name;
+    //             $discount   = $booking->ticket->discount ?? 0;
+    //             $qty        = $booking->quantity ?? 1;
+
+    //             $discountAmount = $discount * $qty;
+
+    //             $ticketDiscounts[$ticketName] = ($ticketDiscounts[$ticketName] ?? 0) + $discountAmount;
+    //             $totalDiscount += $discountAmount;
+    //         }
+
+    //         $totalTickets = in_array($type, ['pos', 'corporate'])
+    //             ? $query->sum('quantity')
+    //             : $query->count('token');
+
+    //         $totalBookings = $query->whereNotNull('amount')->where('amount', '>', 0)->count();
+    //     }
+
+    //     // ✅ Response
+    //     return response()->json([
+    //         'totalAmount' => $totalAmount,
+    //         'totalDiscount' => $totalDiscount,
+    //         'ticketDiscounts' => $ticketDiscounts,
+    //         'totalBookings' => $totalBookings,
+    //         'totalTickets' => $totalTickets,
+    //         'easebuzzTotalAmount' => $easebuzzTotalAmount,
+    //         'instamojoTotalAmount' => $instamojoTotalAmount,
+    //         'phonepeTotalAmount' => $phonepeTotalAmount,
+    //         'cashfreeTotalAmount' => $cashfreeTotalAmount,
+    //         'razorpayTotalAmount' => $razorpayTotalAmount,
+    //         'cashAmount' => $cashAmount,
+    //         'upiAmount' => $upiAmount,
+    //         'cardAmount' => $cardAmount,
+    //         'totalCountScanHistory' => $totalCountScanHistory,
+    //         'todayCountScanHistory' => $todayCountScanHistory,
+    //         'ticketSales' => $ticketSales
+    //     ]);
+    // }
+
+
     public function eventWiseTicketSales($startDate = null, $endDate = null, $type = 'online')
     {
         $loggedInUser = Auth::user();
@@ -1494,7 +1666,7 @@ class DashboardController extends Controller
 
         return $eventSales;
     }
-  
+
     public function getAllData()
     {
         try {
@@ -1679,19 +1851,20 @@ class DashboardController extends Controller
         $isOrganizer = $loggedInUser->hasRole('Organizer');
 
         // Check authorization
-        if (!$isAdmin && 
-        !$loggedInUser->hasRole('Organizer') && 
-        !$loggedInUser->hasRole('POS') && 
-        !$loggedInUser->hasRole('Scanner') &&
-        !$loggedInUser->hasRole('Sponsor') &&
-        !$loggedInUser->hasRole('Agent')
+        if (
+            !$isAdmin &&
+            !$loggedInUser->hasRole('Organizer') &&
+            !$loggedInUser->hasRole('POS') &&
+            !$loggedInUser->hasRole('Scanner') &&
+            !$loggedInUser->hasRole('Sponsor') &&
+            !$loggedInUser->hasRole('Agent')
         ) {
             return response()->json([
                 'status' => false,
                 'message' => 'Unauthorized access',
             ], 403);
         }
-		
+
         // Define date ranges
         $today = now()->toDateString();
         $yesterday = now()->subDay()->toDateString();
@@ -1718,10 +1891,10 @@ class DashboardController extends Controller
 
         // Get online bookings data
         $onlineData = $this->getOnlineBookingData($today, $yesterday, $userIds);
-		
+
         // POS, Agent, and Sponsor data (for both admin and organizer)
         $posData = $this->getBookingTypeData(PosBooking::class, $today, $yesterday, $userIds, true);
-      	
+
         $agentData = $this->getBookingTypeData(Agent::class, $today, $yesterday, $userIds);
 
         $sponsorData = $this->getBookingTypeData(SponsorBooking::class, $today, $yesterday, $userIds);
@@ -1889,8 +2062,8 @@ class DashboardController extends Controller
                     $q->where('status', '1');
                 })
                 ->select('id', 'name', 'organisation')
-               ->latest()        // sort before executing
-    		   ->get();
+                ->latest()        // sort before executing
+                ->get();
 
             $response = [];
 
@@ -1907,7 +2080,7 @@ class DashboardController extends Controller
                 $todayOnline = Booking::whereHas('ticket.event', $eventFilter)
                     ->whereDate('created_at', $today)
                     ->sum('amount');
-				
+
                 // Today Offline (Agent)
                 $todayOfflineBooking = Agent::whereHas('ticket.event', $eventFilter)
                     ->whereDate('created_at', $today)
@@ -1932,13 +2105,13 @@ class DashboardController extends Controller
                 $yesterdayOfflinePOS = PosBooking::whereHas('ticket.event', $eventFilter)
                     ->whereDate('created_at', $yesterday)
                     ->sum('amount');
-                
+
                 // Overall totals
                 $overallOnline = Booking::whereHas('ticket.event', $eventFilter)->sum('amount');
-              	//return $overallOnline;
+                //return $overallOnline;
                 $overallAgent  = Agent::whereHas('ticket.event', $eventFilter)->sum('amount');
                 $overallPOS    = PosBooking::whereHas('ticket.event', $eventFilter)->sum('amount');
-					
+
                 // ✨ NEW: Gateway-wise totals for this organizer (as array)
                 $gatewayTotals = Booking::whereHas('ticket.event', $eventFilter)
                     ->selectRaw('gateway, SUM(amount) as total_amount, COUNT(*) as total_bookings')
@@ -1985,7 +2158,7 @@ class DashboardController extends Controller
                     })
                     ->values()
                     ->toArray();
-				
+
                 $response[] = [
                     'organizer_id'   => $organizerId,
                     'organizer_name' => $org->name,
@@ -2020,9 +2193,9 @@ class DashboardController extends Controller
             ]);
         }
     }
-  
-  
- public function getDashboardOrgTicket()
+
+
+    public function getDashboardOrgTicket()
     {
         $loggedInUser = Auth::user();
         $isAdmin = $loggedInUser->hasRole('Admin');
@@ -2051,7 +2224,7 @@ class DashboardController extends Controller
             'tickets.posBookings' => fn($q) => $q->select('id', 'ticket_id', 'quantity', 'amount', 'created_at'),
             'tickets.agentBooking' => fn($q) => $q->select('id', 'ticket_id', 'amount', 'created_at'),
             'tickets.sponsorBookings' => fn($q) => $q->select('id', 'ticket_id', 'amount', 'created_at'),
-        ])->get(['id', 'name','date_range']);
+        ])->get(['id', 'name', 'date_range']);
 
         $response = [];
 
@@ -2347,7 +2520,4 @@ class DashboardController extends Controller
 
         return response()->json($response);
     }
-
-
-
 }
