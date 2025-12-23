@@ -21,7 +21,9 @@ class MasterBooking extends Model
         'amount',
         'discount',
         'payment_method',
-        'session_id'
+        'session_id',
+        'is_refunded',
+        'refunded_at'
     ];
 
     public function bookings(): HasMany

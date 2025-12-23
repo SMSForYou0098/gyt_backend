@@ -332,6 +332,7 @@ Route::middleware(['restrict.ip'])->group(function () {
 
 
         Route::delete('delete-booking/{id}/{token}', [BookingController::class, 'destroy']);
+        Route::get('refunded-booking/{id}/{token}', [BookingController::class, 'refunded']);
         Route::get('restore-booking/{id}/{token}', [BookingController::class, 'restoreBooking']);
         Route::get('user-bookings/{userId}', [BookingController::class, 'getUserBookings']);
 
