@@ -4,6 +4,7 @@ namespace App\Http\Controllers;
 
 use App\Exports\BookingExport;
 use App\Jobs\BookingMailJob;
+use App\Mail\RefundBookingMail;
 use App\Models\AccreditationBooking;
 use App\Models\AccreditationMasterBooking;
 use App\Models\Agent;
@@ -31,6 +32,7 @@ use App\Services\PermissionService;
 use App\Services\SmsService;
 use App\Services\WhatsappService;
 use Illuminate\Database\Eloquent\SoftDeletes;
+use Illuminate\Support\Facades\Mail;
 
 class BookingController extends Controller
 {
@@ -1019,66 +1021,6 @@ class BookingController extends Controller
         }
     }
 
-    public function refunded($id, $token, WhatsappService $whatsappService)
-    {
-        // Try to find MasterBooking first
-        $Masterbookings = MasterBooking::withTrashed()->where('id', $id)
-            ->where('order_id', $token)
-            ->latest()
-            ->first();
-
-        if ($Masterbookings) {
-            // Get the booking IDs (array or JSON)
-            $bookingIds = is_array($Masterbookings->booking_id)
-                ? $Masterbookings->booking_id
-                : json_decode($Masterbookings->booking_id, true);
-
-            // Mark related bookings as refunded
-            if (!empty($bookingIds) && is_array($bookingIds)) {
-                $bookings = Booking::withTrashed()->whereIn('id', $bookingIds)->get();
-
-                foreach ($bookings as $booking) {
-                    $booking->is_refunded = 1;
-                    $booking->refunded_at = now();
-                    $booking->deleted_at = now();
-                    $booking->save(); // safe update without mass assignment
-                }
-            }
-
-            // Mark the master booking as refunded
-            $Masterbookings->is_refunded = 1;
-            $Masterbookings->refunded_at = now();
-            $Masterbookings->deleted_at = now();
-            $Masterbookings->save();
-
-            return response()->json([
-                'status' => true,
-                'message' => 'Master Booking and related bookings refunded successfully'
-            ], 200);
-        } else {
-            // If no MasterBooking, try to find a normal booking
-            $normalBooking = Booking::withTrashed()->where('id', $id)->where('token', $token)->first();
-
-            if ($normalBooking) {
-                $normalBooking->is_refunded = 1;
-                $normalBooking->refunded_at = now();
-                $normalBooking->deleted_at = now();
-                $normalBooking->save();
-
-                return response()->json([
-                    'status' => true,
-                    'message' => 'Booking refunded successfully'
-                ], 200);
-            } else {
-                return response()->json([
-                    'status' => false,
-                    'message' => 'Booking not found'
-                ], 404);
-            }
-        }
-    }
-
-
     // public function export(Request $request)
     // {
     //     $loggedInUser = Auth::user();
@@ -1599,126 +1541,193 @@ class BookingController extends Controller
     }
 
 
-    // public function refunded($id, $token, SmsService $smsService, WhatsappService $whatsappService)
+    // public function refunded(Request $request, $id, $token, WhatsappService $whatsappService)
     // {
-    //     // Master booking (including soft deleted)
-    //     $Masterbookings = MasterBooking::withTrashed()
-    //         ->where('id', $id)
-    //         ->where('order_id', $token)
-    //         ->latest()
-    //         ->first();
+    //     $isMaster = $request->query('isMaster', false);
+    //     if ($isMaster) {
+    //         $Masterbookings = MasterBooking::withTrashed()
+    //             ->where('order_id', $token)
+    //             ->latest()
+    //             ->first();
 
-    //     if ($Masterbookings) {
-
+    //         // Get the booking IDs (array or JSON)
     //         $bookingIds = is_array($Masterbookings->booking_id)
     //             ? $Masterbookings->booking_id
     //             : json_decode($Masterbookings->booking_id, true);
 
-    //         if (!empty($bookingIds)) {
-
-    //             // Get bookings including deleted
-    //             $bookings = Booking::withTrashed()
-    //                 ->whereIn('id', $bookingIds)
-    //                 ->get();
+    //         // Mark related bookings as refunded
+    //         if (!empty($bookingIds) && is_array($bookingIds)) {
+    //             $bookings = Booking::withTrashed()->whereIn('id', $bookingIds)->get();
 
     //             foreach ($bookings as $booking) {
     //                 $booking->is_refunded = 1;
     //                 $booking->refunded_at = now();
-    //                 $booking->save();
-
-    //                 $this->sendRefundNotification($booking, $smsService, $whatsappService);
+    //                 $booking->deleted_at = now();
+    //                 $booking->save(); // safe update without mass assignment
     //             }
     //         }
 
-    //         // Master booking refund (NO mass assignment)
+    //         // Mark the master booking as refunded
     //         $Masterbookings->is_refunded = 1;
     //         $Masterbookings->refunded_at = now();
+    //         $Masterbookings->deleted_at = now();
     //         $Masterbookings->save();
 
     //         return response()->json([
     //             'status' => true,
-    //             'message' => 'Master booking & related bookings refunded (including deleted)'
+    //             'message' => 'Master Booking and related bookings refunded successfully'
     //         ], 200);
+    //     } else {
+    //         // If no MasterBooking, try to find a normal booking
+    //         $normalBooking = Booking::withTrashed()->where('token', $token)->first();
+
+    //         if ($normalBooking) {
+    //             $normalBooking->is_refunded = 1;
+    //             $normalBooking->refunded_at = now();
+    //             $normalBooking->deleted_at = now();
+    //             $normalBooking->save();
+
+    //             return response()->json([
+    //                 'status' => true,
+    //                 'message' => 'Booking refunded successfully'
+    //             ], 200);
+    //         } else {
+    //             return response()->json([
+    //                 'status' => false,
+    //                 'message' => 'Booking not found'
+    //             ], 404);
+    //         }
     //     }
-
-    //     // Normal booking (including deleted)
-    //     $normalBooking = Booking::withTrashed()
-    //         ->where('id', $id)
-    //         ->where('token', $token)
-    //         ->first();
-
-    //     if ($normalBooking) {
-
-    //         $normalBooking->is_refunded = 1;
-    //         $normalBooking->refunded_at = now();
-    //         $normalBooking->save();
-
-    //         $this->sendRefundNotification($normalBooking, $smsService, $whatsappService);
-
-    //         return response()->json([
-    //             'status' => true,
-    //             'message' => 'Booking refunded successfully'
-    //         ], 200);
-    //     }
-
-    //     return response()->json([
-    //         'status' => false,
-    //         'message' => 'Booking not found'
-    //     ], 404);
     // }
 
-    // /**
-    //  * Send refund notification via SMS, WhatsApp & Email
-    //  */
-    // protected function sendRefundNotification(Booking $booking, SmsService $smsService, WhatsappService $whatsappService)
-    // {
-    //     $ticket = $booking->ticket;
-    //     $event = $ticket->event;
+    public function refunded(Request $request, $id, $token, WhatsappService $whatsappService)
+    {
+        $isMaster = filter_var(
+            $request->query('isMaster', false),
+            FILTER_VALIDATE_BOOLEAN
+        );
 
-    //     $whatsappTemplate = WhatsappApi::where('title', 'refund confirmation')->first();
-    //     $whatsappTemplateName = $whatsappTemplate->template_name ?? '';
+        if ($isMaster) {
 
-    //     $shortLink = $booking->token;
-    //     $shortLinksms = "getyourticket.in/t/{$booking->token}";
+            $Masterbookings = MasterBooking::withTrashed()
+                ->where('order_id', $token)
+                ->latest()
+                ->first();
 
-    //     $socialMessage = 'For future events and promo codes, follow us on Social Media: insta.gyt.co.in | fb.gyt.co.in | wa.gyt.co.in | yt.gyt.co.in';
+            if (!$Masterbookings) {
+                return response()->json([
+                    'status' => false,
+                    'message' => 'Master booking not found'
+                ], 404);
+            }
 
-    //     $dates = explode(',', $event->date_range);
-    //     $formattedDates = [];
-    //     foreach ($dates as $date) {
-    //         $formattedDates[] = \Carbon\Carbon::parse($date)->format('d-m-Y');
-    //     }
-    //     $eventDateTime = implode(' | ', $formattedDates) . ' | ' . $event->start_time . ' - ' . $event->end_time;
+            $bookingIds = is_array($Masterbookings->booking_id)
+                ? $Masterbookings->booking_id
+                : json_decode($Masterbookings->booking_id, true);
 
-    //     $data = (object)[
-    //         'name' => $booking->name,
-    //         'number' => $booking->number,
-    //         'email' => $booking->email,
-    //         'templateName' => 'Refund Notification Template',
-    //         'whatsappTemplateData' => $whatsappTemplateName,
-    //         'shortLink' => $shortLink,
-    //         'insta_whts_url' => $event->insta_whts_url ?? '',
-    //         'mediaurl' => $event->thumbnail,
-    //         'values' => [
-    //             $event->name ?? 'Event',
-    //             $socialMessage,
-    //         ],
-    //         'replacements' => [
-    //             ':Event_Name' => $event->name,
-    //             ':Event_Description' => $socialMessage,
+            if (!empty($bookingIds) && is_array($bookingIds)) {
+                $bookings = Booking::withTrashed()
+                    ->whereIn('id', $bookingIds)
+                    ->get();
 
-    //         ]
-    //     ];
+                foreach ($bookings as $booking) {
+                    $booking->is_refunded = 1;
+                    $booking->refunded_at = now();
+                    $booking->deleted_at = now();
+                    $booking->save();
 
-    //     // Send SMS
-    //     $smsService->send($data);
+                    $this->sendRefundNotification($booking, $whatsappService);
+                }
+            }
 
-    //     // Send WhatsApp
-    //     $whatsappService->send($data);
+            $Masterbookings->is_refunded = 1;
+            $Masterbookings->refunded_at = now();
+            $Masterbookings->deleted_at = now();
+            $Masterbookings->save();
 
-    //     // Send Email
-    //     // if ($booking->email) {
-    //     //     Mail::to($booking->email)->send(new RefundBookingMail($booking));
-    //     // }
-    // }
+            return response()->json([
+                'status' => true,
+                'message' => 'Master Booking and related bookings refunded successfully'
+            ], 200);
+        }
+
+        // NORMAL BOOKING FLOW
+        $normalBooking = Booking::withTrashed()
+            ->where('token', $token)
+            ->first();
+
+        if (!$normalBooking) {
+            return response()->json([
+                'status' => false,
+                'message' => 'Booking not found'
+            ], 404);
+        }
+
+        $normalBooking->is_refunded = 1;
+        $normalBooking->refunded_at = now();
+        $normalBooking->deleted_at = now();
+        $normalBooking->save();
+
+        $this->sendRefundNotification($normalBooking, $whatsappService);
+
+        return response()->json([
+            'status' => true,
+            'message' => 'Booking refunded successfully'
+        ], 200);
+    }
+
+
+    protected function sendRefundNotification(Booking $booking,  WhatsappService $whatsappService)
+    {
+        $ticket = $booking->ticket;
+        $event = $ticket->event;
+
+        $whatsappTemplate = WhatsappApi::where('title', 'refund confirmation')->first();
+        $whatsappTemplateName = $whatsappTemplate->template_name ?? '';
+
+        $shortLink = $booking->token;
+        $shortLinksms = "getyourticket.in/t/{$booking->token}";
+
+        $socialMessage = 'Follow Us on Social Media for Future Event Updates and Offers. WhatsApp: wa.gyt.co.in | Facebook: fb.gyt.co.in';
+
+        $dates = explode(',', $event->date_range);
+        $formattedDates = [];
+        foreach ($dates as $date) {
+            $formattedDates[] = \Carbon\Carbon::parse($date)->format('d-m-Y');
+        }
+        $eventDateTime = implode(' | ', $formattedDates) . ' | ' . $event->start_time . ' - ' . $event->end_time;
+
+        $data = (object)[
+            'name' => $booking->name,
+            'number' => $booking->number,
+            'email' => $booking->email,
+            'templateName' => 'Refund Notification Template',
+            'whatsappTemplateData' => $whatsappTemplateName,
+            'shortLink' => $shortLink,
+            'insta_whts_url' => $event->insta_whts_url ?? '',
+            'mediaurl' => $event->thumbnail,
+            'values' => [
+                $booking->name ?? 'Guest',
+                $event->name ?? 'Event',
+                $socialMessage,
+            ],
+            'replacements' => [
+                ':C_Name' => $booking->name,
+                ':Event_Name' => $event->name,
+                ':Event_Description' => $socialMessage,
+
+            ]
+        ];
+
+        // Send SMS
+        // $smsService->send($data);
+
+        // Send WhatsApp
+        $whatsappService->send($data);
+
+        // Send Email
+        //if ($booking->email) {
+        //    Mail::to($booking->email)->send(new RefundBookingMail($booking));
+        //}
+    }
 }

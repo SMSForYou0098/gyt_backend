@@ -86,8 +86,7 @@ class EventController extends Controller
         $sortedEvents->transform(function ($event) {
             $activeTickets = $event->tickets->where('status', 1);
             $event->lowest_ticket_price = $activeTickets->min('price');
-            if($event->lowest_ticket_price === null)
-            {
+            if ($event->lowest_ticket_price === null) {
                 $event->ticket_close = 'Booking Closed';
             }
             // $event->lowest_ticket_price = $event->tickets->min('price');
@@ -243,8 +242,7 @@ class EventController extends Controller
         $sortedEvents->transform(function ($event) {
             $activeTickets = $event->tickets->where('status', 1);
             $event->lowest_ticket_price = $activeTickets->min('price');
-            if($event->lowest_ticket_price === null)
-            {
+            if ($event->lowest_ticket_price === null) {
                 $event->ticket_close = 'Booking Closed';
             }
             // $event->lowest_ticket_price = $event->tickets->min('price');
@@ -306,7 +304,7 @@ class EventController extends Controller
         return response()->json(['status' => true, 'events' => $events], 200);
     }
 
-   public function eventList($id)
+    public function eventList($id)
     {
         $loggedInUser = Auth::user()->load('reportingUser');
         $today = Carbon::today()->toDateString();
@@ -616,7 +614,7 @@ class EventController extends Controller
     // }
     public function eventByUser(Request $request, $id)
     {
-        
+
         $bookingType = $request->type;
         $loggedInUser = Auth::user();
         $today = Carbon::today()->toDateString();
@@ -1549,7 +1547,7 @@ class EventController extends Controller
             // $events = Event::where('user_id', $user->id)->get();
             $events = Event::where('user_id', $user->id)
                 ->with(['tickets:id,event_id,name'])
-                ->get(['id', 'name']);
+                ->get(['id', 'name','date_range']);
 
             if ($events->isEmpty()) {
                 return response()->json([
@@ -1742,10 +1740,10 @@ class EventController extends Controller
         // For example, you can log it or save it to the database
         return response()->json(['message' => 'Webhook received successfully'], 200);
     }
-  
+
     public function landingOrgId(Request $request, $organisation)
     {
-     //return $organisation;
+        //return $organisation;
         // 🔹 Get all user IDs under this organisation
         $userIds = User::where('organisation', $organisation)->pluck('id');
 
@@ -1755,7 +1753,7 @@ class EventController extends Controller
                 'message' => 'No users found for this organisation.'
             ], 200);
         }
-  $banner = Banner::whereIn('org_id', $userIds)
+        $banner = Banner::whereIn('org_id', $userIds)
             ->select('id', 'org_id', 'images', 'title', 'external_url')
             ->get();
         // 🔹 Get all events for all users in that organisation
@@ -1766,10 +1764,10 @@ class EventController extends Controller
             }
         ])
             ->whereIn('user_id', $userIds) // ✅ Use whereIn for multiple users
-           ->where('status', 1) 
-            ->select('id', 'event_key', 'name', 'user_id', 'category', 'date_range','city','thumbnail');
+            ->where('status', 1)
+            ->select('id', 'event_key', 'name', 'user_id', 'category', 'date_range', 'city', 'thumbnail');
 
-       
+
 
         $events = $query->orderBy('created_at', 'desc')->get();
 
