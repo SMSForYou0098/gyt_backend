@@ -1769,7 +1769,8 @@ class EventController extends Controller
 
 
 
-        $events = $query->orderBy('created_at', 'desc')->get();
+        $events = $query->orderBy('date_range', 'asc')->get();
+        // $events = $query->orderBy('created_at', 'desc')->get();
 
         if ($events->isEmpty()) {
             return response()->json([

@@ -4,6 +4,7 @@ namespace App\Http\Controllers;
 
 use App\Exports\BookingExport;
 use App\Jobs\BookingMailJob;
+use App\Jobs\SendRefundWhatsappJob;
 use App\Mail\RefundBookingMail;
 use App\Models\AccreditationBooking;
 use App\Models\AccreditationMasterBooking;
@@ -1636,7 +1637,8 @@ class BookingController extends Controller
                     $booking->deleted_at = now();
                     $booking->save();
 
-                    $this->sendRefundNotification($booking, $whatsappService);
+                    // $this->sendRefundNotification($booking, $whatsappService);
+                    SendRefundWhatsappJob::dispatch($booking->id);
                 }
             }
 
@@ -1668,7 +1670,13 @@ class BookingController extends Controller
         $normalBooking->deleted_at = now();
         $normalBooking->save();
 
-        $this->sendRefundNotification($normalBooking, $whatsappService);
+        // $this->sendRefundNotification($normalBooking, $whatsappService);
+        SendRefundWhatsappJob::dispatch($normalBooking->id);
+
+        // Send Email
+        //if ($booking->email) {
+        //    Mail::to($booking->email)->send(new RefundBookingMail($booking));
+        //}
 
         return response()->json([
             'status' => true,
@@ -1677,57 +1685,57 @@ class BookingController extends Controller
     }
 
 
-    protected function sendRefundNotification(Booking $booking,  WhatsappService $whatsappService)
-    {
-        $ticket = $booking->ticket;
-        $event = $ticket->event;
+    // protected function sendRefundNotification(Booking $booking,  WhatsappService $whatsappService)
+    // {
+    //     $ticket = $booking->ticket;
+    //     $event = $ticket->event;
 
-        $whatsappTemplate = WhatsappApi::where('title', 'refund confirmation')->first();
-        $whatsappTemplateName = $whatsappTemplate->template_name ?? '';
+    //     $whatsappTemplate = WhatsappApi::where('title', 'refund confirmation')->first();
+    //     $whatsappTemplateName = $whatsappTemplate->template_name ?? '';
 
-        $shortLink = $booking->token;
-        $shortLinksms = "getyourticket.in/t/{$booking->token}";
+    //     $shortLink = $booking->token;
+    //     $shortLinksms = "getyourticket.in/t/{$booking->token}";
 
-        $socialMessage = 'Follow Us on Social Media for Future Event Updates and Offers. WhatsApp: wa.gyt.co.in | Facebook: fb.gyt.co.in';
+    //     $socialMessage = 'Follow Us on Social Media for Future Event Updates and Offers. WhatsApp: wa.gyt.co.in | Facebook: fb.gyt.co.in';
 
-        $dates = explode(',', $event->date_range);
-        $formattedDates = [];
-        foreach ($dates as $date) {
-            $formattedDates[] = \Carbon\Carbon::parse($date)->format('d-m-Y');
-        }
-        $eventDateTime = implode(' | ', $formattedDates) . ' | ' . $event->start_time . ' - ' . $event->end_time;
+    //     $dates = explode(',', $event->date_range);
+    //     $formattedDates = [];
+    //     foreach ($dates as $date) {
+    //         $formattedDates[] = \Carbon\Carbon::parse($date)->format('d-m-Y');
+    //     }
+    //     $eventDateTime = implode(' | ', $formattedDates) . ' | ' . $event->start_time . ' - ' . $event->end_time;
 
-        $data = (object)[
-            'name' => $booking->name,
-            'number' => $booking->number,
-            'email' => $booking->email,
-            'templateName' => 'Refund Notification Template',
-            'whatsappTemplateData' => $whatsappTemplateName,
-            'shortLink' => $shortLink,
-            'insta_whts_url' => $event->insta_whts_url ?? '',
-            'mediaurl' => $event->thumbnail,
-            'values' => [
-                $booking->name ?? 'Guest',
-                $event->name ?? 'Event',
-                $socialMessage,
-            ],
-            'replacements' => [
-                ':C_Name' => $booking->name,
-                ':Event_Name' => $event->name,
-                ':Event_Description' => $socialMessage,
+    //     $data = (object)[
+    //         'name' => $booking->name,
+    //         'number' => $booking->number,
+    //         'email' => $booking->email,
+    //         'templateName' => 'Refund Notification Template',
+    //         'whatsappTemplateData' => $whatsappTemplateName,
+    //         'shortLink' => $shortLink,
+    //         'insta_whts_url' => $event->insta_whts_url ?? '',
+    //         'mediaurl' => $event->thumbnail,
+    //         'values' => [
+    //             $booking->name ?? 'Guest',
+    //             $event->name ?? 'Event',
+    //             $socialMessage,
+    //         ],
+    //         'replacements' => [
+    //             ':C_Name' => $booking->name,
+    //             ':Event_Name' => $event->name,
+    //             ':Event_Description' => $socialMessage,
 
-            ]
-        ];
+    //         ]
+    //     ];
 
-        // Send SMS
-        // $smsService->send($data);
+    //     // Send SMS
+    //     // $smsService->send($data);
 
-        // Send WhatsApp
-        $whatsappService->send($data);
+    //     // Send WhatsApp
+    //     $whatsappService->send($data);
 
-        // Send Email
-        //if ($booking->email) {
-        //    Mail::to($booking->email)->send(new RefundBookingMail($booking));
-        //}
-    }
+    //     // Send Email
+    //     //if ($booking->email) {
+    //     //    Mail::to($booking->email)->send(new RefundBookingMail($booking));
+    //     //}
+    // }
 }

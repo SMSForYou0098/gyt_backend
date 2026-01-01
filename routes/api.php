@@ -53,6 +53,7 @@ use App\Http\Controllers\OrganizationTypeController;
 use App\Http\Controllers\PagesController;
 use App\Http\Controllers\PaymentController;
 use App\Http\Controllers\PaymentGatewayController;
+use App\Http\Controllers\PaymentRefundController;
 use App\Http\Controllers\PopUpController;
 use App\Http\Controllers\PosController;
 use App\Http\Controllers\PromoCodeController;
@@ -146,6 +147,10 @@ Route::middleware(['restrict.ip'])->group(function () {
     Route::get('org-events/{organisation}', [EventController::class, 'landingOrgId']);
 
     Route::middleware(['auth:api', 'check.status'])->group(function () {
+
+        Route::post('/refund', [PaymentRefundController::class, 'refund']);
+
+        
         Route::get('verify-user-settion', [AuthController::class, 'verifyUserSession']);
         //Dashboard routes
         Route::get('/bookingCount/{id}', [DashboardController::class, 'BookingCounts']);
