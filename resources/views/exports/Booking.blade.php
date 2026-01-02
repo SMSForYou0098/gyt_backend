@@ -17,6 +17,8 @@
             <th>Gateway</th>
             <th>PaymentId</th>
             <th>Disabled</th>
+            <th>is_refunded</th>
+            <th>refunded_at</th>
         </tr>
     </thead>
     <tbody>
@@ -41,8 +43,10 @@
                 <td>{{ $bookings['gateway'] }}</td>
                 <td>{{ $bookings['payment_id'] }}</td>
                 <td>
-    {{ $bookings['deleted_at'] ? 'Disable' : 'Enable' }}
-</td>
+                    {{ $bookings['deleted_at'] ? 'Disable' : 'Enable' }}
+                </td>
+                <td>{{ $bookings['is_refunded'] }}</td>
+                 <td>{{ \Carbon\Carbon::parse($bookings['refunded_at'])->format('d-m-Y | h:i:s A') }}</td>
 
 
             </tr>

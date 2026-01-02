@@ -1168,6 +1168,8 @@ class BookingController extends Controller
                 'gateway'     => $first->gateway ?? 'N/A',
                 'payment_id'     => $first->payment_id ?? 'N/A',
                 'deleted_at'     => $first->deleted_at,
+                'is_refunded'     => $first->is_refunded,
+                'refunded_at'     => $first->refunded_at,
 
             ];
         })->values();
