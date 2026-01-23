@@ -28,14 +28,14 @@ class ResetBookingStatus extends Command
             $booking->status = 0;
             $booking->save();
         }
-
-        $SponsorBookings = SponsorBooking::where('type', 'season')->get();
+      
+              $SponsorBookings = SponsorBooking::where('type', 'season')->get();
 
         foreach ($SponsorBookings as $SponsorBooking) {
             $SponsorBooking->status = 0;
             $SponsorBooking->save();
         }
-
+      
 
         $generatedBookings = ComplimentaryBookings::where('type', 'generated')->get();
         foreach ($generatedBookings as $compBooking) {

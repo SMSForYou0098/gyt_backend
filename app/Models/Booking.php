@@ -10,6 +10,33 @@ use App\Models\User;
 class Booking extends Model
 {
     use HasFactory,SoftDeletes;
+  	
+  	protected $fillable = [
+        'ticket_id',
+        'user_id',
+        'agent_id',
+        'promocode_id',
+        'attendee_id',
+        'session_id',
+        'amount',
+        'email',
+        'name',
+        'number',
+        'type',
+        'dates',
+        'payment_method',
+        'discount',
+        'status',
+        'device',
+        'base_amount',
+        'convenience_fee',
+        'txnid',
+        'easepayid',
+        'inf_id',
+        'approval_status',
+    ];
+  
+  
     public function ticket()
     {
         return $this->belongsTo(Ticket::class)->whereNull('deleted_at');
@@ -41,5 +68,9 @@ class Booking extends Model
     public function paymentLog()
     {
         return $this->belongsTo(PaymentLog::class,'session_id','session_id');
+    }
+  	public function influencer()
+    {
+        return $this->belongsTo(Influencer::class, 'inf_id');
     }
 }

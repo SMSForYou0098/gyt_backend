@@ -17,14 +17,16 @@ class MasterBooking extends Model
     protected $fillable = [
         'booking_id', // or 'bookingIds' based on your naming convention
         'user_id',
+        'agent_id',
         'order_id',
         'amount',
         'discount',
         'payment_method',
         'session_id',
-        'is_refunded',
-        'refunded_at'
+        'inf_id',
+        'approval_status',
     ];
+
 
     public function bookings(): HasMany
     {
@@ -44,5 +46,10 @@ class MasterBooking extends Model
     public function paymentLog()
     {
         return $this->belongsTo(PaymentLog::class,'session_id','session_id');
+    }
+  
+  	public function influencer()
+    {
+        return $this->belongsTo(Influencer::class, 'inf_id');
     }
 }

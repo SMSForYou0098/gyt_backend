@@ -6,7 +6,6 @@ use App\Models\AccessArea;
 use App\Models\AccreditationBooking;
 use App\Models\AccreditationMasterBooking;
 use App\Models\Agent;
-use App\Models\AgentEvent;
 use App\Models\AgentMaster;
 use App\Models\AmusementAgentBooking;
 use App\Models\AmusementAgentMasterBooking;
@@ -29,321 +28,511 @@ use Carbon\Carbon;
 use DateTime;
 use DateTimeZone;
 use Auth;
-use Illuminate\Support\Str;
 use Illuminate\Http\Request;
-use Illuminate\Support\Facades\Cache;
-
 
 class ScanController extends Controller
 {
     public function verifyTicket(Request $request, $orderId)
     {
-        $loggedInUser = Auth::user();
-
-        if ($loggedInUser->hasRole('Scanner')) {
-
-            if (!$request->user_id || !$request->event_id) {
-                return response()->json([
-                    "status" => false,
-                    "message" => "user_id and event_id are required for scanner"
-                ], 400);
-            }
-
-            // Check agent_events permission
-            $assigned = AgentEvent::where('user_id', $request->user_id)
-                ->where('event_id', $request->event_id)
-                ->exists();
-
-            if (!$assigned) {
-                return response()->json([
-                    "status" => false,
-                    "message" => "You are not assigned for this event"
-                ], 403);
-            }
-        }
-
-
         try {
-            $ticketRelations = [
-                'ticket' => function ($q) {
-                    $q->select('id', 'event_id', 'name');
-                },
-                'ticket.event' => function ($q) {
-                    $q->select('id', 'event_key', 'name', 'category');
-                },
-                'ticket.event.category' => function ($q) {
-                    $q->select('id', 'title', 'attendy_required');
-                },
-            ];
-
-            $booking = Booking::with($ticketRelations + ['attendee', 'user:id,name,number,email'])
-                ->where('event_id', $request->event_id)
-                ->where('token', $orderId)
-                ->first();
-
-            $posBooking = PosBooking::with($ticketRelations + ['attendee'])
-                ->where('event_id', $request->event_id)
-                ->where('token', $orderId)
-                ->first();
-
-            $complimentaryBookings = ComplimentaryBookings::with($ticketRelations + ['attendee'])
-                ->where('event_id', $request->event_id)
-                ->where('token', $orderId)
-                ->first();
-
+            // Try to find each type of booking
+            $loggedInUser = Auth::user();  // This fetches the authenticated user via Laravel's Auth system
+            $isAdmin = $loggedInUser->hasRole('Admin');
+            $booking = Booking::where('token', $orderId)->with(['ticket.event.user', 'attendee'])->first();
+            $agentBooking = Agent::where('token', $orderId)->with('ticket.event.user', 'attendee')->first();
+            $AccreditationBooking = AccreditationBooking::where('token', $orderId)->with('ticket.event.user', 'attendee')->first();
+            $SponsorBooking = SponsorBooking::where('token', $orderId)->with('ticket.event.user', 'attendee')->first();
+            $amusementAgentBooking = AmusementAgentBooking::where('token', $orderId)->with('ticket.event.user', 'attendee')->first();
+            $ExhibitionBooking = ExhibitionBooking::where('token', $orderId)->with('ticket.event.user', 'attendee')->first();
+            $amusementBooking = AmusementBooking::where('token', $orderId)->with(['ticket.event.user', 'attendee'])->first();
+            $complimentaryBookings = ComplimentaryBookings::where('token', $orderId)->with('ticket.event.user')->first();
+            $posBooking = PosBooking::where('token', $orderId)->with('ticket.event.user', 'ticket.event.Category')->first();
+            $corporateBooking = CorporateBooking::where('token', $orderId)->with('ticket.event.user', 'ticket.event.Category')->first();
+            $amusementPosBooking = AmusementPosBooking::where('token', $orderId)->with('ticket.event.user', 'ticket.event.Category')->first();
             $masterBookings = MasterBooking::where('order_id', $orderId)->first();
+            $amusementMasterBookings = AmusementMasterBooking::where('order_id', $orderId)->first();
+            $agentMasterBookings = AgentMaster::where('order_id', $orderId)->first();
+            $AccreditationMasterBooking = AccreditationMasterBooking::where('order_id', $orderId)->first();
+            $SponsorMasterBooking = SponsorMasterBooking::where('order_id', $orderId)->first();
+            $amusementAgentMasterBookings = AmusementAgentMasterBooking::where('order_id', $orderId)->first();
 
-            $sessionId = Str::uuid()->toString();
-            $table = null;
-            $bookingId = null;
+            // return response()->json($amusementAgentBooking);
+          $eventData = $this->eventCheck($booking, $agentBooking, $posBooking, $corporateBooking, $complimentaryBookings, $masterBookings, $agentMasterBookings, $ExhibitionBooking, $amusementBooking, $amusementMasterBookings, $amusementAgentBooking, $amusementAgentMasterBookings, $amusementPosBooking, $AccreditationBooking, $AccreditationMasterBooking, $SponsorBooking, $SponsorMasterBooking);
+            $organizer = $eventData['organizer'];
+            $relatedBookings = $eventData['relatedBookings'];
+            $event = $eventData['event'];
+            $category = Category::find($event['category']);
 
-            /*
-            |--------------------------------------------------------------------------
-            | CASE 1: POS BOOKING — CHECK FOR SET BOOKING FIRST
-            |--------------------------------------------------------------------------
-            */
-            if ($posBooking) {
+            if ($event) {
+                $dateRange = array_map('trim', explode(',', $event->date_range));
+                $timezone = new DateTimeZone('Asia/Kolkata');
+                if (count($dateRange) === 1) {
+                    $startDate = new DateTime($dateRange[0], $timezone);
+                    $startDate->setTime(0, 0);
+                    $endDate = clone $startDate;
+                    $endDate->setTime(23, 59, 59);
+                } elseif (count($dateRange) === 2) {
+                    $startDate = new DateTime($dateRange[0], $timezone);
+                    $startDate->setTime(0, 0);
+                    $endDate = new DateTime($dateRange[1], $timezone);
+                    $endDate->setTime(23, 59, 59);
+                } else {
+                    return response()->json([
+                        'status' => 'false',
+                        'message' => 'Invalid date range',
+                    ], 400);
+                }
+                $currentDate = new DateTime('now', $timezone);
 
-                $event = $posBooking->ticket->event;
+                // Additional validation to ensure dates are valid
+                if (!$startDate || !$endDate) {
+                    return response()->json([
+                        'status' => 'false',
+                        'message' => 'Invalid dates provided',
+                    ], 400);
+                }
+                if (!($currentDate >= $startDate && $currentDate <= $endDate)) {
+                    return response()->json([
+                        'status' => 'false',
+                        'message' => 'This event is not currently active',
+                    ], 400);
+                }
 
-                // Check if this is a SET booking (has set_id)
-                if (!empty($posBooking->set_id)) {
-
-                    // Fetch all POS bookings with same set_id
-                    $setBookings = PosBooking::with($ticketRelations + ['attendee', 'user'])
-                        ->where('set_id', $posBooking->set_id)
-                        ->get();
-
-                    if ($setBookings->count() > 1) {
-
-                        // STORE SESSION FOR SET BOOKING
-                        $bookingIds = $setBookings->pluck('id')->toArray();
-
-                        Cache::put("scan_session:$sessionId", [
-                            'order_id' => $orderId,
-                            'booking_id' => implode(',', $bookingIds),
-                            'table_name' => "pos_bookings_set",
-                        ], now()->addMinutes(1));
-
-                        // Total quantity
-                        $totalQuantity = $setBookings->sum('quantity');
-
-                        // Attendees array
-                        $attendees = $setBookings->map(fn($b) => $b->attendee)->filter()->values();
-
-                        // Tickets array (without event)
-                        $tickets = $setBookings->filter(fn($b) => $b->ticket)->groupBy('ticket_id')->map(function ($group) {
-                            $ticketData = $group->first()->ticket->toArray();
-                            unset($ticketData['event']);
-                            $ticketData['quantity'] = $group->sum('quantity') ?: $group->count();
-                            return $ticketData;
-                        })->values();
-
-                        // Build set data
-                        $setData = [
-                            'set_id' => $posBooking->set_id,
-                            'token' => $posBooking->token,
-                            'total_bookings' => $setBookings->count(),
-                            'quantity' => $totalQuantity,
-                            'total_amount' => $setBookings->sum('total_amount'),
-                            'discount' => $setBookings->sum('discount'),
-                            'booking_date' => $setBookings->pluck('created_at')->filter()->first() ?? $posBooking->created_at,
-                            'status' => $posBooking->status,
-                            'name' => $setBookings->pluck('name')->filter()->first() ?? $posBooking->name,
-                            'number' => $setBookings->pluck('number')->filter()->first() ?? $posBooking->number,
-                            'email' => $setBookings->pluck('email')->filter()->first() ?? $posBooking->email,
-                            'payment_method' => $posBooking->payment_method,
-                            'attendees' => $attendees,
-                            'tickets' => $tickets,
-                            'user' => optional($setBookings->first())->user,
-                        ];
-
+                if ($category->title == 'Amusement') {
+                    // Check which booking is available and assign $bookingDate accordingly
+                    if (!empty($amusementBooking?->booking_date)) {
+                        $bookingDate = new DateTime($amusementBooking->booking_date, $timezone);
+                    } elseif (!empty($amusementAgentBooking?->booking_date)) {
+                        $bookingDate = new DateTime($amusementAgentBooking->booking_date, $timezone);
+                    } elseif (!empty($posBooking?->booking_date)) {
+                        $bookingDate = new DateTime($posBooking->booking_date, $timezone);
+                    } elseif (!empty($amusementPosBooking?->booking_date)) {
+                        $bookingDate = new DateTime($amusementPosBooking->booking_date, $timezone);
+                    } else {
                         return response()->json([
-                            "status" => true,
-                            "session_id" => $sessionId,
-                            "is_master" => false,
-                            "is_set" => true,
-                            "bookings" => $setData,
-                            "attendee_required" => $event->category->attendy_required ?? false,
-                            "event" => $event,
-                            "type" => "POS",
-                        ]);
+                            'status' => false,
+                            'message' => 'No valid booking found.',
+                        ], 400);
+                    }
+
+                    // Compare booking date with the current date
+                    if ($bookingDate->format('Y-m-d') !== $currentDate->format('Y-m-d')) {
+                        return response()->json([
+                            'status' => false,
+                            'message' => 'Booking is only valid on ' . $bookingDate->format('Y-m-d'),
+                        ], 400);
                     }
                 }
 
-                // SINGLE POS BOOKING (no set_id or only one in set)
-                $table = "pos_bookings";
-                $bookingId = $posBooking->id;
+                try {
+                    if (empty($event->entry_time)) {
+                        return response()->json([
+                            'status' => 'false',
+                            'message' => 'Event Entry Time Not Provided',
+                        ], 400);
+                    }
+                    $startTimeWithDate = clone $currentDate;
+                    $startTime = DateTime::createFromFormat('H:i', $event->entry_time, $timezone);
+                    // $startTime = DateTime::createFromFormat('H:i', $event->start_time, $timezone);
+                    $startTimeWithDate->setTime($startTime->format('H'), $startTime->format('i'));
 
-                Cache::put("scan_session:$sessionId", [
-                    'order_id' => $orderId,
-                    'booking_id' => $bookingId,
-                    'table_name' => $table,
-                ], now()->addMinutes(1));
-
-                $ticketData = $posBooking->ticket->toArray();
-                unset($ticketData['event']);
-
-                return response()->json([
-                    "status" => true,
-                    "session_id" => $sessionId,
-                    "is_master" => false,
-                    "is_set" => false,
-                    "bookings" => [
-                        "id" => $posBooking->id,
-                        "name" => $posBooking->name,
-                        "number" => $posBooking->number,
-                        "token" => $posBooking->token,
-                        "quantity" => $posBooking->quantity ?? 1,
-                        "status" => $posBooking->status,
-                        "booking_date" => $posBooking->created_at,
-                        "ticket_id" => $posBooking->ticket_id,
-                        "attendee_id" => $posBooking->attendee_id,
-                        "total_amount" => $posBooking->total_amount,
-                        "attendee" => $posBooking->attendee,
-                        "tickets" => $ticketData,
-                        "user" => $posBooking->user,
-                    ],
-                    "attendee_required" => $event->category->attendy_required ?? false,
-                    "event" => $event,
-                    "type" => "POS",
-                ]);
-            }
-
-            /*
-            |--------------------------------------------------------------------------
-            | CASE 2: NORMAL / COMPLIMENTARY — SINGLE BOOKING
-            |--------------------------------------------------------------------------
-            */
-            if ($booking || $complimentaryBookings) {
-
-                $b = $booking ?? $complimentaryBookings;
-                $event = $b->ticket->event;
-
-                if ($booking) {
-                    $table = "bookings";
-                } else {
-                    $table = "complimentary_bookings";
-                }
-
-                $bookingId = $b->id;
-
-                Cache::put("scan_session:$sessionId", [
-                    'order_id' => $orderId,
-                    'booking_id' => $bookingId,
-                    'table_name' => $table,
-                ], now()->addMinutes(1));
-
-                // ✅ Remove event from ticket to avoid duplication
-                $ticketData = $b->ticket->toArray();
-                unset($ticketData['event']);
-
-                return response()->json([
-                    "status" => true,
-                    "session_id" => $sessionId,
-                    "is_master" => false,
-                    "is_set" => false,
-                    "bookings" => [
-                        "id" => $b->id,
-                        "name" => $b->name,
-                        "number" => $b->number,
-                        "token" => $b->token,
-                        "quantity" => $b->quantity ?? 1,
-                        "status" => $b->status,
-                        "ticket_id" => $b->ticket_id,
-                        "attendee_id" => $b->attendee_id,
-                        "total_amount" => $b->total_amount,
-                        "booking_date" => $b->created_at,
-                        "attendee" => $b->attendee,
-                        "tickets" => $ticketData,
-                        "user" => $b->user ?? null,
-                    ],
-                    "attendee_required" => $event->category->attendy_required ?? false,
-                    "event" => $event,
-                    "type" => "Online",
-                ]);
-            }
-
-            /*
-            |--------------------------------------------------------------------------
-            | CASE 3: MASTER BOOKING — MULTIPLE BOOKINGS
-            |--------------------------------------------------------------------------
-            */
-            if ($masterBookings) {
-
-                $bookingIds = $masterBookings->booking_id;
-
-                // Fetch all linked bookings
-                $relatedBookings = Booking::with($ticketRelations + ['attendee', 'user:id,name,number,email'])
-                    ->whereIn('id', $bookingIds)
-                    ->get();
-
-                if ($relatedBookings->isEmpty()) {
+                    // Check if the event has started
+                    if ($currentDate < $startTimeWithDate) {
+                        return response()->json([
+                            'status' => 'false',
+                            'message' => 'This event has not started yet',
+                        ], 400);
+                    }
+                } catch (\Exception $e) {
                     return response()->json([
-                        "status" => false,
-                        "message" => "No bookings found"
+                        'status' => 'false',
+                        'message' => 'Invalid start time provided',
+                    ], 400);
+                }
+            }
+
+            // Check if the organizer ID is valid and matches the request ID
+            if (
+                !$organizer ||
+                (!$isAdmin && (
+                    intval($organizer) !== intval($loggedInUser->id) &&
+                    intval($loggedInUser->id) !== intval($organizer) &&
+                    intval($organizer) !== intval($loggedInUser->reporting_user)
+                ))
+            ) {
+                return response()->json([
+                    'status' => 'false',
+                    'message' => 'This Ticket Is Not Recognized',
+                    'organizer' => $isAdmin,
+                ], 404);
+            }
+
+            // Handle the specific booking type logic
+            if ($posBooking) {
+                if ($posBooking->status == '0') {
+                    return response()->json([
+                        'status' => true,
+                        'is_master' => false,
+                        'bookings' => $posBooking,
+                        'attendee_required' => false,
+                        'event' => $event,
+                        'type' => "POS"
+                    ], 200);
+                } else {
+                    return response()->json([
+                        'status' => false,
+                        'message' => 'Already Scanned',
+                        'time' => $posBooking->updated_at
                     ], 404);
                 }
+            }
+            if ($corporateBooking) {
+                if ($corporateBooking->status == '0') {
+                    return response()->json([
+                        'status' => true,
+                        'is_master' => false,
+                        'bookings' => $corporateBooking,
+                        'attendee_required' => false,
+                        'event' => $event,
+                        'type' => "CorporateBooking"
+                    ], 200);
+                } else {
+                    return response()->json([
+                        'status' => false,
+                        'message' => 'Already Scanned',
+                        'time' => $corporateBooking->updated_at
+                    ], 404);
+                }
+            } elseif ($amusementPosBooking) {
+                if ($amusementPosBooking->status == '0') {
+                    return response()->json([
+                        'status' => true,
+                        'is_master' => false,
+                        'bookings' => $amusementPosBooking,
+                        'attendee_required' => false,
+                        'event' => $event,
+                        'type' => "POS"
+                    ], 200);
+                } else {
+                    return response()->json([
+                        'status' => false,
+                        'message' => 'Already Scanned',
+                        'time' => $amusementPosBooking->updated_at
+                    ], 404);
+                }
+            } elseif ($booking) {
+                if ($booking->status == '0') {
+                    return response()->json([
+                        'status' => true,
+                        'is_master' => false,
+                        'bookings' => $booking,
+                        'attendee_required' => $event->Category->attendy_required ?? false,
+                        'event' => $event,
+                        'type' => "Online"
+                    ], 200);
+                } else {
+                    return response()->json([
+                        'status' => false,
+                        'message' => 'Already Scanned',
+                        'time' => $booking->updated_at
+                    ], 404);
+                }
+            } elseif ($amusementBooking) {
 
-                // STORE SESSION FOR MASTER BOOKING
-                Cache::put("scan_session:$sessionId", [
-                    'order_id' => $orderId,
-                    'booking_id' => implode(',', $bookingIds),
-                    'table_name' => "master_bookings",
-                ], now()->addMinutes(1));
+                if ($amusementBooking->status == '0') {
 
-                // Event from first booking
-                $event = $relatedBookings->first()->ticket->event ?? null;
+                    return response()->json([
+                        'status' => true,
+                        'is_master' => false,
+                        'bookings' => $amusementBooking,
+                        'attendee_required' => $event->Category->attendy_required ?? false,
+                        'event' => $event,
+                        'type' => "Online"
+                    ], 200);
+                } else {
+                    return response()->json([
+                        'status' => false,
+                        'message' => 'Already Scanned',
+                        'time' => $amusementBooking->updated_at
+                    ], 404);
+                }
+            } elseif ($agentBooking) {
+                if ($agentBooking->status == '0') {
+                    return response()->json([
+                        'status' => true,
+                        'is_master' => false,
+                        'bookings' => $agentBooking,
+                        'attendee_required' => $event->Category->attendy_required ?? false,
+                        'event' => $event,
+                        'type' => "Agent"
+                    ], 200);
+                } else {
+                    return response()->json([
+                        'status' => false,
+                        'message' => 'Already Scanned',
+                        'time' => $agentBooking->updated_at
+                    ], 404);
+                }
+            } elseif ($AccreditationBooking) {
+                if ($AccreditationBooking->status == '0') {
+                    //     $accessAreaIds = is_array($AccreditationBooking->access_area)
+                    //     ? $AccreditationBooking->access_area
+                    //     : explode(',', $AccreditationBooking->access_area);
 
-                $totalQuantity = $relatedBookings->count();
+                    // // Fetch names from AccessArea model
+                    // $accessAreaNames = AccessArea::whereIn('id', $accessAreaIds)->pluck('title');
+                    // $AccreditationBooking->access_area = $accessAreaNames;
 
-                // Attendees array
-                $attendees = $relatedBookings->map(function ($b) {
-                    return $b->attendee;
-                })->filter()->values();
+                    $bookingAccess = is_array($AccreditationBooking->access_area)
+                        ? $AccreditationBooking->access_area
+                        : explode(',', $AccreditationBooking->access_area);
 
-                // Tickets array (without event)
-                $tickets = $relatedBookings->map(function ($b) {
-                    $ticketData = $b->ticket->toArray();
-                    unset($ticketData['event']);
-                    return $ticketData;
-                })->filter()->unique('id')->values();
+                    $ticketAccess = is_array($AccreditationBooking->ticket->access_area ?? null)
+                        ? $AccreditationBooking->ticket->access_area
+                        : explode(',', $AccreditationBooking->ticket->access_area ?? '');
 
-                // Clean master booking data
-                $masterData = $masterBookings->toArray();
-                unset($masterData['bookings']);
-                $masterData['quantity'] = $totalQuantity;
-                $masterData['attendees'] = $attendees;
-                $masterData['user'] = optional($relatedBookings->first())->user;
-                $masterData['booking_date'] = $relatedBookings->pluck('created_at')->filter()->first();
-                $masterData['tickets'] = $tickets;
+                    // Merge and get unique access area IDs
+                    $mergedAccessIds = collect($bookingAccess)
+                        ->merge($ticketAccess)
+                        ->map(fn($id) => (int) trim($id))
+                        ->unique()
+                        ->values()
+                        ->all();
+                    $accessAreaNames = AccessArea::whereIn('id', $mergedAccessIds)->pluck('title');
+                    $AccreditationBooking->access_area = $accessAreaNames;
+
+                    return response()->json([
+                        'status' => true,
+                        'is_master' => false,
+                        'bookings' => $AccreditationBooking,
+                        'attendee_required' => $event->Category->attendy_required ?? false,
+                        // 'access_area' => $accessAreaNames ?? [],
+                        'event' => $event,
+                        'type' => "Accreditation"
+                    ], 200);
+                } else {
+                    return response()->json([
+                        'status' => false,
+                        'message' => 'Already Scanned',
+                        'time' => $AccreditationBooking->updated_at
+                    ], 404);
+                }
+            } elseif ($SponsorBooking) {
+                if ($SponsorBooking->status == '0') {
+                    return response()->json([
+                        'status' => true,
+                        'is_master' => false,
+                        'bookings' => $SponsorBooking,
+                        'attendee_required' => $event->Category->attendy_required ?? false,
+                        'event' => $event,
+                        'type' => "Agent"
+                    ], 200);
+                } else {
+                    return response()->json([
+                        'status' => false,
+                        'message' => 'Already Scanned',
+                        'time' => $SponsorBooking->updated_at
+                    ], 404);
+                }
+            } elseif ($amusementAgentBooking) {
+                if ($amusementAgentBooking->status == '0') {
+                    return response()->json([
+                        'status' => true,
+                        'is_master' => false,
+                        'bookings' => $amusementAgentBooking,
+                        'attendee_required' => $event->Category->attendy_required ?? false,
+                        'event' => $event,
+                        'type' => "Agent"
+                    ], 200);
+                } else {
+                    return response()->json([
+                        'status' => false,
+                        'message' => 'Already Scanned',
+                        'time' => $amusementAgentBooking->updated_at
+                    ], 404);
+                }
+            } elseif ($ExhibitionBooking) {
+                if ($ExhibitionBooking->status == '0') {
+                    return response()->json([
+                        'status' => true,
+                        'is_master' => false,
+                        'bookings' => $ExhibitionBooking,
+                        'attendee_required' => $event->Category->attendy_required ?? false,
+                        'event' => $event,
+                        'type' => "Agent"
+                    ], 200);
+                } else {
+                    return response()->json([
+                        'status' => false,
+                        'message' => 'Already Scanned',
+                        'time' => $ExhibitionBooking->updated_at
+                    ], 404);
+                }
+            } elseif ($complimentaryBookings) {
+                if ($complimentaryBookings->status == '0') {
+                    return response()->json([
+                        'status' => true,
+                        'is_master' => false,
+                        'bookings' => $complimentaryBookings,
+                        'attendee_required' => false,
+                        'event' => $event,
+                        'type' => "Complimentary"
+                    ], 200);
+                } else {
+                    return response()->json([
+                        'status' => false,
+                        'message' => 'Already Scanned',
+                        'time' => $complimentaryBookings->updated_at
+                    ], 404);
+                }
+            } else if ($masterBookings) {
+              
+            $allStatusZero = $relatedBookings->every(function ($relatedBooking) {
+                return $relatedBooking->status == "0";
+            });
+
+            if ($allStatusZero) {
+                $masterBookings->bookings = $relatedBookings;
+                return response()->json([
+                    'status' => true,
+                    'is_master' => true,
+                    'bookings' => $masterBookings,
+                    'attendee_required' => $event->Category->attendy_required ?? false,
+                    'event' => $event,
+                    'type' => "Online"
+                ], 200);
+            } else {
+                // Check if any individual ticket was scanned
+                $scannedBooking = $relatedBookings->where('status', '!=', '0')->sortByDesc('updated_at')->first();
+                $allScanned = $relatedBookings->every(function ($relatedBooking) {
+                    return $relatedBooking->status != "0";
+                });
 
                 return response()->json([
-                    "status" => true,
-                    "session_id" => $sessionId,
-                    "is_master" => true,
-                    "is_set" => false,
-                    "bookings" => $masterData,
-                    "attendee_required" => $event->category->attendy_required ?? false,
-                    "event" => $event,
-                    "type" => "Online",
-                ]);
+                    'status' => false,
+                    'message' => $allScanned ? 'Already Scanned' : 'Already scanned individually',
+                    'time' => $scannedBooking->updated_at ?? $masterBookings->updated_at
+                ], 400);
             }
+        } elseif ($amusementMasterBookings) {
+            $allStatusZero = $relatedBookings->every(function ($relatedBooking) {
+                return $relatedBooking->status == "0";
+            });
 
-            /*
-            |--------------------------------------------------------------------------
-            | INVALID ORDER ID
-            |--------------------------------------------------------------------------
-            */
+            if ($allStatusZero) {
+                $amusementMasterBookings->bookings = $relatedBookings;
+                return response()->json([
+                    'status' => true,
+                    'is_master' => true,
+                    'bookings' => $amusementMasterBookings,
+                    'attendee_required' => $event->Category->attendy_required ?? false,
+                    'event' => $event,
+                    'type' => "Online"
+                ], 200);
+            } else {
+                $scannedBooking = $relatedBookings->where('status', '!=', '0')->sortByDesc('updated_at')->first();
+                $allScanned = $relatedBookings->every(function ($relatedBooking) {
+                    return $relatedBooking->status != "0";
+                });
+
+                return response()->json([
+                    'status' => false,
+                    'message' => $allScanned ? 'Already Scanned' : 'Already scanned individually',
+                    'time' => $scannedBooking->updated_at ?? $amusementMasterBookings->updated_at
+                ], 400);
+            }
+        } elseif ($agentMasterBookings) {
+            $allStatusZero = $relatedBookings->every(function ($relatedBooking) {
+                return $relatedBooking->status == "0";
+            });
+
+            if ($allStatusZero) {
+                $agentMasterBookings->bookings = $relatedBookings;
+                return response()->json([
+                    'status' => true,
+                    'is_master' => true,
+                    'bookings' => $agentMasterBookings,
+                    'attendee_required' => $event->Category->attendy_required ?? false,
+                    'event' => $event,
+                    'type' => "Agent"
+                ], 200);
+            } else {
+                $scannedBooking = $relatedBookings->where('status', '!=', '0')->sortByDesc('updated_at')->first();
+                $allScanned = $relatedBookings->every(function ($relatedBooking) {
+                    return $relatedBooking->status != "0";
+                });
+
+                return response()->json([
+                    'status' => false,
+                    'message' => $allScanned ? 'Already Scanned' : 'Already scanned individually',
+                    'time' => $scannedBooking->updated_at ?? $agentMasterBookings->updated_at
+                ], 400);
+            }
+        } elseif ($AccreditationMasterBooking) {
+            $allStatusZero = $relatedBookings->every(function ($relatedBooking) {
+                return $relatedBooking->status == "0";
+            });
+
+            if ($allStatusZero) {
+                $AccreditationMasterBooking->bookings = $relatedBookings;
+                return response()->json([
+                    'status' => true,
+                    'is_master' => true,
+                    'bookings' => $AccreditationMasterBooking,
+                    'attendee_required' => $event->Category->attendy_required ?? false,
+                    'event' => $event,
+                    'type' => "Agent"
+                ], 200);
+            } else {
+                $scannedBooking = $relatedBookings->where('status', '!=', '0')->sortByDesc('updated_at')->first();
+                $allScanned = $relatedBookings->every(function ($relatedBooking) {
+                    return $relatedBooking->status != "0";
+                });
+
+                return response()->json([
+                    'status' => false,
+                    'message' => $allScanned ? 'Already Scanned' : 'Already scanned individually',
+                    'time' => $scannedBooking->updated_at ?? $AccreditationMasterBooking->updated_at
+                ], 400);
+            }
+        } elseif ($SponsorMasterBooking) {
+            $allStatusZero = $relatedBookings->every(function ($relatedBooking) {
+                return $relatedBooking->status == "0";
+            });
+
+            if ($allStatusZero) {
+                $SponsorMasterBooking->bookings = $relatedBookings;
+                return response()->json([
+                    'status' => true,
+                    'is_master' => true,
+                    'bookings' => $SponsorMasterBooking,
+                    'attendee_required' => $event->Category->attendy_required ?? false,
+                    'event' => $event,
+                    'type' => "Agent"
+                ], 200);
+            } else {
+                $scannedBooking = $relatedBookings->where('status', '!=', '0')->sortByDesc('updated_at')->first();
+                $allScanned = $relatedBookings->every(function ($relatedBooking) {
+                    return $relatedBooking->status != "0";
+                });
+
+                return response()->json([
+                    'status' => false,
+                    'message' => $allScanned ? 'Already Scanned' : 'Already scanned individually',
+                    'time' => $scannedBooking->updated_at ?? $SponsorMasterBooking->updated_at
+                ], 400);
+            }
+        } else {
             return response()->json([
-                "status" => false,
-                "message" => "Invalid Ticket / Order ID"
+                'status' => false,
+                'message' => 'No booking found'
             ], 404);
+        }
         } catch (\Exception $e) {
-
+            // Handle unexpected errors
             return response()->json([
-                "status" => false,
-                "message" => "An error occurred: " . $e->getMessage()
+                'status' => false,
+                'message' => 'An error occurred: ' . $e->getMessage(),
             ], 500);
         }
     }
@@ -369,7 +558,7 @@ class ScanController extends Controller
         $amusementAgentMasterBookings = AmusementAgentMasterBooking::where('order_id', $orderId)->first();
         $today = Carbon::now()->toDateTimeString();
 
-        $eventData = $this->eventCheck($booking, $agentBooking, $posBooking, $corporateBooking, $complimentaryBookings, $masterBookings, $agentMasterBookings, $ExhibitionBooking, $amusementBooking, $amusementMasterBookings, $amusementAgentBooking, $amusementAgentMasterBookings, $amusementPosBooking, $AccreditationBooking, $AccreditationMasterBooking, $SponsorBooking, $SponsorMasterBooking);
+        $eventData = $this->eventCheck($booking, $agentBooking, $posBooking, $corporateBooking, $complimentaryBookings, $masterBookings, $agentMasterBookings, $ExhibitionBooking, $amusementBooking, $amusementMasterBookings, $amusementAgentBooking, $amusementAgentMasterBookings, $amusementPosBooking, $AccreditationBooking, $AccreditationMasterBooking, $SponsorBooking,$SponsorMasterBooking);
         $organizer = $eventData['organizer'];
         $relatedBookings = $eventData['relatedBookings'];
         $event = $eventData['event'];
@@ -382,7 +571,7 @@ class ScanController extends Controller
             }
             $booking->is_scaned = true;
             $booking->save();
-            // $history = $this->logScanHistory($booking->user_id, auth()->id(), $booking->token, 'online');
+           // $history = $this->logScanHistory($booking->user_id, auth()->id(), $booking->token, 'online');
             return response()->json([
                 'status' => true,
                 'bookings' => $booking->status
@@ -395,7 +584,7 @@ class ScanController extends Controller
             }
             $amusementBooking->is_scaned = true;
             $amusementBooking->save();
-            // $history = $this->logScanHistory($booking->user_id, auth()->id(), $booking->token, 'amusementBooking');
+           // $history = $this->logScanHistory($booking->user_id, auth()->id(), $booking->token, 'amusementBooking');
             return response()->json([
                 'status' => true,
                 'bookings' => $amusementBooking->status
@@ -423,7 +612,7 @@ class ScanController extends Controller
             // $agentBooking->status = true;
             $AccreditationBooking->is_scaned = true;
             $AccreditationBooking->save();
-            // $history = $this->logScanHistory($AccreditationBooking->user_id, auth()->id(), $AccreditationBooking->token, 'AccreditationBooking');
+           // $history = $this->logScanHistory($AccreditationBooking->user_id, auth()->id(), $AccreditationBooking->token, 'AccreditationBooking');
             return response()->json([
                 'status' => true,
                 'bookings' => $AccreditationBooking->status
@@ -497,7 +686,7 @@ class ScanController extends Controller
             $corporateBooking->is_scaned = true;
             $corporateBooking->status = true;
             $corporateBooking->save();
-            // $history = $this->logScanHistory($corporateBooking->user_id, auth()->id(), $corporateBooking->token, 'corporateBooking');
+           // $history = $this->logScanHistory($corporateBooking->user_id, auth()->id(), $corporateBooking->token, 'corporateBooking');
 
             return response()->json([
                 'status' => true,
@@ -570,7 +759,7 @@ class ScanController extends Controller
                 }
                 $relatedBooking->is_scaned = true;
                 $relatedBooking->save();
-                // $history = $this->logScanHistory($relatedBooking->user_id, auth()->id(), $amusementMasterBookings->order_id, 'amusementMasterBookings');
+               // $history = $this->logScanHistory($relatedBooking->user_id, auth()->id(), $amusementMasterBookings->order_id, 'amusementMasterBookings');
             }
             return response()->json([
                 'status' => true,
@@ -594,7 +783,7 @@ class ScanController extends Controller
                 }
                 $relatedBooking->is_scaned = true;
                 $relatedBooking->save();
-                // $history = $this->logScanHistory($relatedBooking->user_id, auth()->id(), $agentMasterBookings->order_id, 'agentMasterBookings');
+               // $history = $this->logScanHistory($relatedBooking->user_id, auth()->id(), $agentMasterBookings->order_id, 'agentMasterBookings');
             }
             return response()->json([
                 'status' => 'true',
@@ -660,7 +849,7 @@ class ScanController extends Controller
                 }
                 $relatedBooking->is_scaned = true;
                 $relatedBooking->save();
-                //  $history = $this->logScanHistory($relatedBooking->user_id, auth()->id(), $amusementAgentMasterBookings->order_idn, 'amusementAgentMasterBookings');
+              //  $history = $this->logScanHistory($relatedBooking->user_id, auth()->id(), $amusementAgentMasterBookings->order_idn, 'amusementAgentMasterBookings');
             }
             return response()->json([
                 'status' => 'true',
@@ -748,7 +937,7 @@ class ScanController extends Controller
                 $event = $relatedBookings->first()->ticket->event;
             }
         } elseif ($SponsorMasterBooking) {
-            $agentIds = $SponsorMasterBooking->booking_id;
+            $agentIds = $SponsorMasterBooking->booking_id;       
             $relatedBookings = SponsorBooking::with('ticket.event.user', 'attendee')->whereIn('id', $agentIds)->get();
             if ($relatedBookings->isNotEmpty()) {
                 $organizer = $relatedBookings->first()->ticket->event->user->id;
@@ -769,29 +958,29 @@ class ScanController extends Controller
     private function logScanHistory($userId, $scannerId, $tokenId, $bookingSource = null)
     {
         $now = now()->toDateTimeString();
-
+    
         $query = ScanHistory::where('user_id', $userId)
             ->where('scanner_id', $scannerId);
-
+    
         if ($bookingSource !== null) {
             $query->where('booking_source', $bookingSource);
         }
-
+    
         $history = $query->first();
-
+    
         if ($history) {
             // Append scan time
             $times = json_decode($history->scan_time ?? '[]', true) ?: [];
             $times[] = $now;
             $history->scan_time = json_encode($times);
-
+    
             // Ensure token is always an array
             $tokens = json_decode($history->token ?? '[]', true) ?: [];
             if (!in_array($tokenId, $tokens)) {
                 $tokens[] = $tokenId;
             }
             $history->token = json_encode($tokens);
-
+    
             $history->count += 1;
             $history->save();
         } else {
@@ -805,10 +994,10 @@ class ScanController extends Controller
                 'count' => 1,
             ]);
         }
-
+    
         return $history;
     }
-
+    
     // private function logScanHistory($userId, $scannerId, $tokenId, $bookingSource = null)
     // {
     //     $now = now()->toDateTimeString();
@@ -983,8 +1172,8 @@ class ScanController extends Controller
     //         ], 500);
     //     }
     // }
-
-    public function getScanHistories(Request $request)
+  
+      public function getScanHistories(Request $request)
     {
         try {
             if ($request->has('date')) {

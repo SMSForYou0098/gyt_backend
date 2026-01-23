@@ -12,6 +12,7 @@ use App\Models\CashfreeConfig;
 use App\Models\CorporateBooking;
 use App\Models\EasebuzzConfig;
 use App\Models\Event;
+use App\Models\Category;
 use App\Models\ExhibitionBooking;
 use App\Models\Instamojo;
 use App\Models\MasterBooking;
@@ -57,7 +58,7 @@ class DashboardController extends Controller
         } else {
             // Organizer: get all users in hierarchy (recursive)
             $userIds = $this->getAllUsersUnder($loggedInUser->id);
-            //return $userIds;
+			//return $userIds;
             // Get ticket IDs from organizer's events
             $ticketIds = Event::where('user_id', $loggedInUser->id)
                 ->with('tickets')
@@ -137,7 +138,7 @@ class DashboardController extends Controller
 
         // Get direct children
         $directUsers = User::where('reporting_user', $userId)->pluck('id');
-        //return $directUsers;
+		//return $directUsers;
         if ($directUsers->isEmpty()) {
             return $userIds;
         }
@@ -1205,7 +1206,7 @@ class DashboardController extends Controller
         $cardAmount = 0;
         $totalCountScanHistory = 0;
         $todayCountScanHistory = 0;
-
+        
 
         $startDate = null;
         $endDate = null;
@@ -1225,7 +1226,7 @@ class DashboardController extends Controller
             $startDate = Carbon::today()->startOfDay();
             $endDate = Carbon::today()->endOfDay();
         }
-        $ticketSales = $this->eventWiseTicketSales($startDate, $endDate, $type);
+		$ticketSales = $this->eventWiseTicketSales($startDate, $endDate, $type);
         // Base query
         switch ($type) {
             case 'online':
@@ -1374,180 +1375,8 @@ class DashboardController extends Controller
             'ticketSales' => $ticketSales
         ]);
     }
-
-    // new descount code
-    // public function getDashboardSummary($type, Request $request)
-    // {
-    //     $user = auth()->user();
-
-    //     $totalAmount = 0;
-    //     $totalDiscount = 0;
-    //     $totalBookings = 0;
-    //     $totalTickets = 0;
-
-    //     $easebuzzTotalAmount = 0;
-    //     $instamojoTotalAmount = 0;
-    //     $phonepeTotalAmount = 0;
-    //     $cashfreeTotalAmount = 0;
-    //     $razorpayTotalAmount = 0;
-
-    //     $cashAmount = 0;
-    //     $upiAmount = 0;
-    //     $cardAmount = 0;
-
-    //     $totalCountScanHistory = 0;
-    //     $todayCountScanHistory = 0;
-
-    //     $ticketDiscounts = [];
-
-    //     // 📅 Date filter
-    //     if ($request->has('date')) {
-    //         $dates = explode(',', $request->date);
-
-    //         if (count($dates) === 1 || $dates[0] === $dates[1]) {
-    //             $startDate = Carbon::parse($dates[0])->startOfDay();
-    //             $endDate   = Carbon::parse($dates[0])->endOfDay();
-    //         } elseif (count($dates) === 2) {
-    //             $startDate = Carbon::parse($dates[0])->startOfDay();
-    //             $endDate   = Carbon::parse($dates[1])->endOfDay();
-    //         } else {
-    //             return response()->json(['status' => false, 'message' => 'Invalid date format'], 400);
-    //         }
-    //     } else {
-    //         $startDate = Carbon::today()->startOfDay();
-    //         $endDate   = Carbon::today()->endOfDay();
-    //     }
-
-    //     $ticketSales = $this->eventWiseTicketSales($startDate, $endDate, $type);
-
-    //     // 🔀 Base query
-    //     switch ($type) {
-
-    //         case 'online':
-    //             $query = Booking::whereBetween('created_at', [$startDate, $endDate]);
-
-    //             $easebuzzTotalAmount = (clone $query)->where('gateway', 'easebuzz')->sum('amount');
-    //             $instamojoTotalAmount = (clone $query)->where('gateway', 'instamojo')->sum('amount');
-    //             $phonepeTotalAmount  = (clone $query)->where('gateway', 'phonepe')->sum('amount');
-    //             $cashfreeTotalAmount = (clone $query)->where('gateway', 'cashfree')->sum('amount');
-    //             $razorpayTotalAmount = (clone $query)->where('gateway', 'razorpay')->sum('amount');
-    //             break;
-
-    //         case 'amusement-online':
-    //             $query = AmusementBooking::whereBetween('created_at', [$startDate, $endDate]);
-    //             break;
-
-    //         case 'agent':
-    //             $query = Agent::whereBetween('created_at', [$startDate, $endDate]);
-
-    //             if ($user->hasRole('Agent')) {
-    //                 $query->where('agent_id', $user->id);
-    //             }
-
-    //             $agentBookings = $query->get();
-    //             $cashAmount = $agentBookings->where('payment_method', 'cash')->sum('amount');
-    //             $upiAmount  = $agentBookings->where('payment_method', 'upi')->sum('amount');
-    //             $cardAmount = $agentBookings->where('payment_method', 'net banking')->sum('amount');
-    //             break;
-
-    //         case 'sponsor':
-    //             $query = SponsorBooking::whereBetween('created_at', [$startDate, $endDate]);
-    //             if ($user->hasRole('Sponsor')) {
-    //                 $query->where('sponsor_id', $user->id);
-    //             }
-    //             break;
-
-    //         case 'accreditation':
-    //             $query = AccreditationBooking::whereBetween('created_at', [$startDate, $endDate]);
-    //             if ($user->hasRole('Accreditation')) {
-    //                 $query->where('accreditation_id', $user->id);
-    //             }
-    //             break;
-
-    //         case 'pos':
-    //             $query = PosBooking::whereBetween('created_at', [$startDate, $endDate]);
-    //             if ($user->hasRole('POS')) {
-    //                 $query->where('user_id', $user->id);
-    //             }
-    //             break;
-
-    //         case 'corporate':
-    //             $query = CorporateBooking::whereBetween('created_at', [$startDate, $endDate]);
-    //             break;
-
-    //         case 'pending bookings':
-    //             $query = PenddingBooking::whereBetween('created_at', [$startDate, $endDate]);
-    //             break;
-
-    //         case 'scan history':
-    //             $totalCountScanHistory = ScanHistory::count();
-    //             $todayCountScanHistory = ScanHistory::whereBetween('created_at', [$startDate, $endDate])->count();
-    //             $query = null;
-    //             break;
-
-    //         default:
-    //             return response()->json(['error' => 'Invalid type'], 400);
-    //     }
-
-    //     // 🔐 Role-based filtering
-    //     if ($query !== null && $type !== 'agent') {
-
-    //         if ($user->hasRole('Organizer')) {
-    //             $eventIds = Event::where('user_id', $user->id)->pluck('id');
-    //             $ticketIds = Ticket::whereIn('event_id', $eventIds)->pluck('id');
-    //             $query->whereIn('ticket_id', $ticketIds);
-    //         }
-    //     }
-
-    //     // 🧮 Totals + Ticket-wise Discount
-    //     if ($query !== null) {
-
-    //         $totalAmount = $query->sum('amount');
-
-    //         $bookings = $query->with('ticket')->get();
-
-    //         foreach ($bookings as $booking) {
-    //             if (!$booking->ticket) continue;
-
-    //             $ticketName = $booking->ticket->name;
-    //             $discount   = $booking->ticket->discount ?? 0;
-    //             $qty        = $booking->quantity ?? 1;
-
-    //             $discountAmount = $discount * $qty;
-
-    //             $ticketDiscounts[$ticketName] = ($ticketDiscounts[$ticketName] ?? 0) + $discountAmount;
-    //             $totalDiscount += $discountAmount;
-    //         }
-
-    //         $totalTickets = in_array($type, ['pos', 'corporate'])
-    //             ? $query->sum('quantity')
-    //             : $query->count('token');
-
-    //         $totalBookings = $query->whereNotNull('amount')->where('amount', '>', 0)->count();
-    //     }
-
-    //     // ✅ Response
-    //     return response()->json([
-    //         'totalAmount' => $totalAmount,
-    //         'totalDiscount' => $totalDiscount,
-    //         'ticketDiscounts' => $ticketDiscounts,
-    //         'totalBookings' => $totalBookings,
-    //         'totalTickets' => $totalTickets,
-    //         'easebuzzTotalAmount' => $easebuzzTotalAmount,
-    //         'instamojoTotalAmount' => $instamojoTotalAmount,
-    //         'phonepeTotalAmount' => $phonepeTotalAmount,
-    //         'cashfreeTotalAmount' => $cashfreeTotalAmount,
-    //         'razorpayTotalAmount' => $razorpayTotalAmount,
-    //         'cashAmount' => $cashAmount,
-    //         'upiAmount' => $upiAmount,
-    //         'cardAmount' => $cardAmount,
-    //         'totalCountScanHistory' => $totalCountScanHistory,
-    //         'todayCountScanHistory' => $todayCountScanHistory,
-    //         'ticketSales' => $ticketSales
-    //     ]);
-    // }
-
-
+  
+  
     public function eventWiseTicketSales($startDate = null, $endDate = null, $type = 'online')
     {
         $loggedInUser = Auth::user();
@@ -1666,7 +1495,7 @@ class DashboardController extends Controller
 
         return $eventSales;
     }
-
+  
     public function getAllData()
     {
         try {
@@ -1851,20 +1680,19 @@ class DashboardController extends Controller
         $isOrganizer = $loggedInUser->hasRole('Organizer');
 
         // Check authorization
-        if (
-            !$isAdmin &&
-            !$loggedInUser->hasRole('Organizer') &&
-            !$loggedInUser->hasRole('POS') &&
-            !$loggedInUser->hasRole('Scanner') &&
-            !$loggedInUser->hasRole('Sponsor') &&
-            !$loggedInUser->hasRole('Agent')
+        if (!$isAdmin && 
+        !$loggedInUser->hasRole('Organizer') && 
+        !$loggedInUser->hasRole('POS') && 
+        !$loggedInUser->hasRole('Scanner') &&
+        !$loggedInUser->hasRole('Sponsor') &&
+        !$loggedInUser->hasRole('Agent')
         ) {
             return response()->json([
                 'status' => false,
                 'message' => 'Unauthorized access',
             ], 403);
         }
-
+		
         // Define date ranges
         $today = now()->toDateString();
         $yesterday = now()->subDay()->toDateString();
@@ -1891,10 +1719,10 @@ class DashboardController extends Controller
 
         // Get online bookings data
         $onlineData = $this->getOnlineBookingData($today, $yesterday, $userIds);
-
+		
         // POS, Agent, and Sponsor data (for both admin and organizer)
         $posData = $this->getBookingTypeData(PosBooking::class, $today, $yesterday, $userIds, true);
-
+      	
         $agentData = $this->getBookingTypeData(Agent::class, $today, $yesterday, $userIds);
 
         $sponsorData = $this->getBookingTypeData(SponsorBooking::class, $today, $yesterday, $userIds);
@@ -2062,8 +1890,8 @@ class DashboardController extends Controller
                     $q->where('status', '1');
                 })
                 ->select('id', 'name', 'organisation')
-                ->latest()        // sort before executing
-                ->get();
+               ->latest()        // sort before executing
+    		   ->get();
 
             $response = [];
 
@@ -2080,7 +1908,7 @@ class DashboardController extends Controller
                 $todayOnline = Booking::whereHas('ticket.event', $eventFilter)
                     ->whereDate('created_at', $today)
                     ->sum('amount');
-
+				
                 // Today Offline (Agent)
                 $todayOfflineBooking = Agent::whereHas('ticket.event', $eventFilter)
                     ->whereDate('created_at', $today)
@@ -2105,13 +1933,13 @@ class DashboardController extends Controller
                 $yesterdayOfflinePOS = PosBooking::whereHas('ticket.event', $eventFilter)
                     ->whereDate('created_at', $yesterday)
                     ->sum('amount');
-
+                
                 // Overall totals
                 $overallOnline = Booking::whereHas('ticket.event', $eventFilter)->sum('amount');
-                //return $overallOnline;
+              	//return $overallOnline;
                 $overallAgent  = Agent::whereHas('ticket.event', $eventFilter)->sum('amount');
                 $overallPOS    = PosBooking::whereHas('ticket.event', $eventFilter)->sum('amount');
-
+					
                 // ✨ NEW: Gateway-wise totals for this organizer (as array)
                 $gatewayTotals = Booking::whereHas('ticket.event', $eventFilter)
                     ->selectRaw('gateway, SUM(amount) as total_amount, COUNT(*) as total_bookings')
@@ -2158,7 +1986,7 @@ class DashboardController extends Controller
                     })
                     ->values()
                     ->toArray();
-
+				
                 $response[] = [
                     'organizer_id'   => $organizerId,
                     'organizer_name' => $org->name,
@@ -2180,6 +2008,7 @@ class DashboardController extends Controller
                     'offline_overall_total' => $overallAgent + $overallPOS,
                     'overall_total'         => $overallOnline + $overallAgent + $overallPOS,
                     'gateway_wise_overall' => $gatewayTotals, // ✨ NEW
+
                 ];
             }
             return response()->json([
@@ -2193,335 +2022,85 @@ class DashboardController extends Controller
             ]);
         }
     }
-
-
-    // public function getDashboardOrgTicket()
-    // {
-    //     $loggedInUser = Auth::user();
-    //     $isAdmin = $loggedInUser->hasRole('Admin');
-    //     $isOrganizer = $loggedInUser->hasRole('Organizer');
-
-    //     if (!$isAdmin && !$isOrganizer) {
-    //         return response()->json([
-    //             'status'  => false,
-    //             'message' => 'Unauthorized access',
-    //         ], 403);
-    //     }
-
-    //     $todayStart     = Carbon::today()->startOfDay();
-    //     $todayEnd       = Carbon::today()->endOfDay();
-    //     $yesterdayStart = Carbon::yesterday()->startOfDay();
-    //     $yesterdayEnd   = Carbon::yesterday()->endOfDay();
-
-    //     $query = Event::where('status', 1);
-
-    //     if ($isOrganizer) {
-    //         $query->where('user_id', $loggedInUser->id);
-    //     }
-
-    //     $events = $query->with([
-    //         'tickets.bookings' => fn($q) => $q->select('id', 'ticket_id', 'amount', 'created_at'),
-    //         'tickets.posBookings' => fn($q) => $q->select('id', 'ticket_id', 'quantity', 'amount', 'created_at'),
-    //         'tickets.agentBooking' => fn($q) => $q->select('id', 'ticket_id', 'amount', 'created_at'),
-    //         'tickets.sponsorBookings' => fn($q) => $q->select('id', 'ticket_id', 'amount', 'created_at'),
-    //     ])->get(['id', 'name', 'date_range']);
-
-    //     $response = [];
-
-    //     foreach ($events as $event) {
-    //         $ticketData = [];
-
-    //         // Event-level totals
-    //         $eventTodayCount      = 0;
-    //         $eventYesterdayCount  = 0;
-    //         $eventOverallCount    = 0;
-
-    //         $eventTodayAmount     = 0;
-    //         $eventYesterdayAmount = 0;
-    //         $eventOverallAmount   = 0;
-
-    //         $eventOnlineTodayCount      = 0;
-    //         $eventOnlineYesterdayCount  = 0;
-    //         $eventOnlineOverallCount    = 0;
-
-    //         $eventOfflineTodayCount     = 0;
-    //         $eventOfflineYesterdayCount = 0;
-    //         $eventOfflineOverallCount   = 0;
-
-    //         $eventOnlineTodayAmount      = 0;
-    //         $eventOnlineYesterdayAmount  = 0;
-    //         $eventOnlineOverallAmount    = 0;
-
-    //         $eventOfflineTodayAmount     = 0;
-    //         $eventOfflineYesterdayAmount = 0;
-    //         $eventOfflineOverallAmount   = 0;
-
-    //         // 🔹 Event-level sponsor totals
-    //         $eventSponsorTodayCount      = 0;
-    //         $eventSponsorYesterdayCount  = 0;
-    //         $eventSponsorOverallCount    = 0;
-
-    //         $eventSponsorTodayAmount     = 0;
-    //         $eventSponsorYesterdayAmount = 0;
-    //         $eventSponsorOverallAmount   = 0;
-
-    //         foreach ($event->tickets as $ticket) {
-
-    //             // ---------- ONLINE (WEB) ----------
-    //             // Counts
-    //             $todayOnlineCount = $ticket->bookings
-    //                 ->whereBetween('created_at', [$todayStart, $todayEnd])
-    //                 ->count();
-
-    //             $yesterdayOnlineCount = $ticket->bookings
-    //                 ->whereBetween('created_at', [$yesterdayStart, $yesterdayEnd])
-    //                 ->count();
-
-    //             $overallOnlineCount = $ticket->bookings->count();
-
-    //             // Amounts
-    //             $todayOnlineAmount = $ticket->bookings
-    //                 ->whereBetween('created_at', [$todayStart, $todayEnd])
-    //                 ->sum('amount');
-
-    //             $yesterdayOnlineAmount = $ticket->bookings
-    //                 ->whereBetween('created_at', [$yesterdayStart, $yesterdayEnd])
-    //                 ->sum('amount');
-
-    //             $overallOnlineAmount = $ticket->bookings->sum('amount');
-
-    //             // ---------- POS (OFFLINE) ----------
-    //             // Counts
-    //             $todayPOSCount = $ticket->posBookings
-    //                 ->whereBetween('created_at', [$todayStart, $todayEnd])
-    //                 ->sum('quantity');
-
-    //             $yesterdayPOSCount = $ticket->posBookings
-    //                 ->whereBetween('created_at', [$yesterdayStart, $yesterdayEnd])
-    //                 ->sum('quantity');
-
-    //             $overallPOSCount = $ticket->posBookings->sum('quantity');
-
-    //             // Amounts
-    //             $todayPOSAmount = $ticket->posBookings
-    //                 ->whereBetween('created_at', [$todayStart, $todayEnd])
-    //                 ->sum('amount');
-
-    //             $yesterdayPOSAmount = $ticket->posBookings
-    //                 ->whereBetween('created_at', [$yesterdayStart, $yesterdayEnd])
-    //                 ->sum('amount');
-
-    //             $overallPOSAmount = $ticket->posBookings->sum('amount');
-
-    //             // ---------- AGENT (OFFLINE) ----------
-    //             // Counts
-    //             $todayAgentCount = $ticket->agentBooking
-    //                 ->whereBetween('created_at', [$todayStart, $todayEnd])
-    //                 ->count();
-
-    //             $yesterdayAgentCount = $ticket->agentBooking
-    //                 ->whereBetween('created_at', [$yesterdayStart, $yesterdayEnd])
-    //                 ->count();
-
-    //             $overallAgentCount = $ticket->agentBooking->count();
-
-    //             // Amounts
-    //             $todayAgentAmount = $ticket->agentBooking
-    //                 ->whereBetween('created_at', [$todayStart, $todayEnd])
-    //                 ->sum('amount');
-
-    //             $yesterdayAgentAmount = $ticket->agentBooking
-    //                 ->whereBetween('created_at', [$yesterdayStart, $yesterdayEnd])
-    //                 ->sum('amount');
-
-    //             $overallAgentAmount = $ticket->agentBooking->sum('amount');
-
-    //             // ---------- SPONSOR ----------
-    //             $todaySponsorCount = $ticket->sponsorBookings
-    //                 ->whereBetween('created_at', [$todayStart, $todayEnd])
-    //                 ->count();
-
-    //             $yesterdaySponsorCount = $ticket->sponsorBookings
-    //                 ->whereBetween('created_at', [$yesterdayStart, $yesterdayEnd])
-    //                 ->count();
-
-    //             $overallSponsorCount = $ticket->sponsorBookings->count();
-
-    //             $todaySponsorAmount = $ticket->sponsorBookings
-    //                 ->whereBetween('created_at', [$todayStart, $todayEnd])
-    //                 ->sum('amount');
-
-    //             $yesterdaySponsorAmount = $ticket->sponsorBookings
-    //                 ->whereBetween('created_at', [$yesterdayStart, $yesterdayEnd])
-    //                 ->sum('amount');
-
-    //             $overallSponsorAmount = $ticket->sponsorBookings->sum('amount');
-
-    //             // ---------- TOTALS PER TICKET ----------
-
-    //             // Online
-    //             $todayOnlineTotalCount      = $todayOnlineCount;
-    //             $yesterdayOnlineTotalCount  = $yesterdayOnlineCount;
-    //             $overallOnlineTotalCount    = $overallOnlineCount;
-
-    //             $todayOnlineTotalAmount     = $todayOnlineAmount;
-    //             $yesterdayOnlineTotalAmount = $yesterdayOnlineAmount;
-    //             $overallOnlineTotalAmount   = $overallOnlineAmount;
-
-    //             // Offline (POS + Agent)
-    //             $todayOfflineCount          = $todayPOSCount + $todayAgentCount;
-    //             $yesterdayOfflineCount      = $yesterdayPOSCount + $yesterdayAgentCount;
-    //             $overallOfflineCount        = $overallPOSCount + $overallAgentCount;
-
-    //             $todayOfflineAmount         = $todayPOSAmount + $todayAgentAmount;
-    //             $yesterdayOfflineAmount     = $yesterdayPOSAmount + $yesterdayAgentAmount;
-    //             $overallOfflineAmount       = $overallPOSAmount + $overallAgentAmount;
-
-    //             // TOTAL including sponsor
-    //             $todayTotalCount            = $todayOnlineTotalCount + $todayOfflineCount;
-    //             $yesterdayTotalCount        = $yesterdayOnlineTotalCount + $yesterdayOfflineCount;
-    //             $overallTotalCount          = $overallOnlineTotalCount + $overallOfflineCount;
-
-    //             $todayTotalAmount           = $todayOnlineTotalAmount + $todayOfflineAmount;
-    //             $yesterdayTotalAmount       = $yesterdayOnlineTotalAmount + $yesterdayOfflineAmount;
-    //             $overallTotalAmount         = $overallOnlineTotalAmount + $overallOfflineAmount;
-
-    //             // ---------- EVENT TOTALS (AGGREGATE) ----------
-    //             $eventTodayCount      += $todayTotalCount;
-    //             $eventYesterdayCount  += $yesterdayTotalCount;
-    //             $eventOverallCount    += $overallTotalCount;
-
-    //             $eventTodayAmount     += $todayTotalAmount;
-    //             $eventYesterdayAmount += $yesterdayTotalAmount;
-    //             $eventOverallAmount   += $overallTotalAmount;
-
-    //             $eventOnlineTodayCount      += $todayOnlineTotalCount;
-    //             $eventOnlineYesterdayCount  += $yesterdayOnlineTotalCount;
-    //             $eventOnlineOverallCount    += $overallOnlineTotalCount;
-
-    //             $eventOfflineTodayCount     += $todayOfflineCount;
-    //             $eventOfflineYesterdayCount += $yesterdayOfflineCount;
-    //             $eventOfflineOverallCount   += $overallOfflineCount;
-
-    //             $eventOnlineTodayAmount      += $todayOnlineTotalAmount;
-    //             $eventOnlineYesterdayAmount  += $yesterdayOnlineTotalAmount;
-    //             $eventOnlineOverallAmount    += $overallOnlineTotalAmount;
-
-    //             $eventOfflineTodayAmount     += $todayOfflineAmount;
-    //             $eventOfflineYesterdayAmount += $yesterdayOfflineAmount;
-    //             $eventOfflineOverallAmount   += $overallOfflineAmount;
-
-    //             // 🔹 EVENT SPONSOR TOTALS
-    //             $eventSponsorTodayCount      += $todaySponsorCount;
-    //             $eventSponsorYesterdayCount  += $yesterdaySponsorCount;
-    //             $eventSponsorOverallCount    += $overallSponsorCount;
-
-    //             $eventSponsorTodayAmount     += $todaySponsorAmount;
-    //             $eventSponsorYesterdayAmount += $yesterdaySponsorAmount;
-    //             $eventSponsorOverallAmount   += $overallSponsorAmount;
-
-    //             // ---------- TICKET DATA ----------
-    //             $ticketData[] = [
-    //                 'name' => $ticket->name,
-
-    //                 // Total counts
-    //                 'today_count'     => $todayTotalCount,
-    //                 'yesterday_count' => $yesterdayTotalCount,
-    //                 'overall_count'   => $overallTotalCount,
-
-    //                 // Total amounts
-    //                 'today_amount'     => $todayTotalAmount,
-    //                 'yesterday_amount' => $yesterdayTotalAmount,
-    //                 'overall_amount'   => $overallTotalAmount,
-
-    //                 // Online breakdown
-    //                 'online' => [
-    //                     'today_count'     => $todayOnlineTotalCount,
-    //                     'yesterday_count' => $yesterdayOnlineTotalCount,
-    //                     'overall_count'   => $overallOnlineTotalCount,
-
-    //                     'today_amount'     => $todayOnlineTotalAmount,
-    //                     'yesterday_amount' => $yesterdayOnlineTotalAmount,
-    //                     'overall_amount'   => $overallOnlineTotalAmount,
-    //                 ],
-
-    //                 // Offline breakdown (POS + Agent)
-    //                 'offline' => [
-    //                     'today_count'     => $todayOfflineCount,
-    //                     'yesterday_count' => $yesterdayOfflineCount,
-    //                     'overall_count'   => $overallOfflineCount,
-
-    //                     'today_amount'     => $todayOfflineAmount,
-    //                     'yesterday_amount' => $yesterdayOfflineAmount,
-    //                     'overall_amount'   => $overallOfflineAmount,
-    //                 ],
-
-    //                 // Sponsor breakdown
-    //                 'sponsor' => [
-    //                     'today_count'     => $todaySponsorCount,
-    //                     'yesterday_count' => $yesterdaySponsorCount,
-    //                     'overall_count'   => $overallSponsorCount,
-
-    //                     'today_amount'     => $todaySponsorAmount,
-    //                     'yesterday_amount' => $yesterdaySponsorAmount,
-    //                     'overall_amount'   => $overallSponsorAmount,
-    //                 ],
-    //             ];
-    //         }
-
-    //         $response[] = [
-    //             'name' => $event->name,
-    //             'date_range' => $event->date_range,
-
-    //             // EVENT LEVEL TOTAL COUNTS
-    //             'today_count'     => $eventTodayCount,
-    //             'yesterday_count' => $eventYesterdayCount,
-    //             'overall_count'   => $eventOverallCount,
-
-    //             // EVENT LEVEL TOTAL AMOUNTS
-    //             'today_amount'     => $eventTodayAmount,
-    //             'yesterday_amount' => $eventYesterdayAmount,
-    //             'overall_amount'   => $eventOverallAmount,
-
-    //             // EVENT LEVEL ONLINE/OFFLINE SUMMARY
-    //             'online' => [
-    //                 'today_count'     => $eventOnlineTodayCount,
-    //                 'yesterday_count' => $eventOnlineYesterdayCount,
-    //                 'overall_count'   => $eventOnlineOverallCount,
-
-    //                 'today_amount'     => $eventOnlineTodayAmount,
-    //                 'yesterday_amount' => $eventOnlineYesterdayAmount,
-    //                 'overall_amount'   => $eventOnlineOverallAmount,
-    //             ],
-    //             'offline' => [
-    //                 'today_count'     => $eventOfflineTodayCount,
-    //                 'yesterday_count' => $eventOfflineYesterdayCount,
-    //                 'overall_count'   => $eventOfflineOverallCount,
-
-    //                 'today_amount'     => $eventOfflineTodayAmount,
-    //                 'yesterday_amount' => $eventOfflineYesterdayAmount,
-    //                 'overall_amount'   => $eventOfflineOverallAmount,
-    //             ],
-
-    //             // EVENT LEVEL SPONSOR SUMMARY
-    //             'sponsor' => [
-    //                 'today_count'     => $eventSponsorTodayCount,
-    //                 'yesterday_count' => $eventSponsorYesterdayCount,
-    //                 'overall_count'   => $eventSponsorOverallCount,
-
-    //                 'today_amount'     => $eventSponsorTodayAmount,
-    //                 'yesterday_amount' => $eventSponsorYesterdayAmount,
-    //                 'overall_amount'   => $eventSponsorOverallAmount,
-    //             ],
-
-    //             'tickets' => $ticketData,
-    //         ];
-    //     }
-
-    //     return response()->json($response);
-    // }
-
-    public function getDashboardOrgTicket()
+  
+ 
+public function eventWiseGatewaySale()
+{
+    try {
+        $loggedInUser = Auth::user();
+        $isAdmin = $loggedInUser->hasRole('Admin');
+        $isOrganizer = $loggedInUser->hasRole('Organizer');
+
+        if (!$isAdmin && !$isOrganizer) {
+            return response()->json([
+                'status' => false,
+                'message' => 'Unauthorized access',
+            ], 403);
+        }
+
+        // Build the base query for events
+        $eventQuery = Event::where('status', '1');
+
+        if ($isOrganizer) {
+            // Organizer sees only their events
+            $eventQuery->where('user_id', $loggedInUser->id);
+        }
+
+        // Get all active events with their tickets and organizer info
+        $events = $eventQuery->select('id', 'name', 'user_id')
+            ->with(['tickets:id,event_id', 'user:id,organisation'])
+            ->latest()
+            ->get();
+
+        $response = [];
+
+        foreach ($events as $event) {
+            $ticketIds = $event->tickets->pluck('id');
+
+            if ($ticketIds->isEmpty()) {
+                continue; // Skip events with no tickets
+            }
+
+            // Get gateway-wise sales for this event
+            $gatewayWiseSales = Booking::whereIn('ticket_id', $ticketIds)
+                ->selectRaw('gateway, SUM(amount) as total_amount, COUNT(*) as total_bookings')
+                ->groupBy('gateway')
+                ->get()
+                ->map(function ($item) {
+                    return [
+                        'name' => $item->gateway ?? 'unknown',
+                        'total_amount' => (float) $item->total_amount,
+                        'total_bookings' => (int) $item->total_bookings,
+                    ];
+                })
+                ->values()
+                ->toArray();
+
+            // Only add events that have bookings
+            if (!empty($gatewayWiseSales)) {
+                $response[] = [
+                    'event_id' => $event->id,
+                    'event' => $event->name,
+                    'organisation' => $event->user->organisation ?? 'N/A',
+                    'gateway' => $gatewayWiseSales,
+                ];
+            }
+        }
+
+              return response()->json([
+            'status' => true,
+            'data' => $response,
+        ]);
+    } catch (Exception $e) {
+        return response()->json([
+            'status' => false,
+            'message' => $e->getMessage(),
+        ]);
+    }
+}
+  
+  
+public function getDashboardOrgTicket()
 {
     $loggedInUser = Auth::user();
     $isAdmin = $loggedInUser->hasRole('Admin');
@@ -2546,6 +2125,7 @@ class DashboardController extends Controller
     }
 
     $events = $query->with([
+        'tickets:id,ticket_quantity,event_id,name',
         'tickets.bookings:id,ticket_id,amount,created_at',
         'tickets.posBookings:id,ticket_id,quantity,amount,created_at',
         'tickets.agentBooking:id,ticket_id,amount,created_at',
@@ -2689,7 +2269,8 @@ class DashboardController extends Controller
             // ================= TICKET RESPONSE =================
             $ticketData[] = [
                 'name' => $ticket->name,
-
+				'quantity' => $ticket->ticket_quantity,
+              
                 'today_count' => $todayTotalCount,
                 'yesterday_count' => $yesterdayTotalCount,
                 'overall_count' => $overallTotalCount,
@@ -2748,6 +2329,7 @@ class DashboardController extends Controller
         // ================= EVENT RESPONSE =================
         $response[] = [
             'name' => $event->name,
+             'quantity' => $ticket->ticket_quantity,
             'date_range' => $event->date_range,
 
             'today_count' => $eventTodayCount,
@@ -2809,4 +2391,151 @@ class DashboardController extends Controller
 
     return response()->json($response);
 }
+  
+  
+    public function getInfluencerWiseBookings()
+    {
+        try {
+            $loggedInUser = Auth::user();
+            $isAdmin = $loggedInUser->hasRole('Admin');
+            $isOrganizer = $loggedInUser->hasRole('Organizer');
+
+            if (!$isAdmin && !$isOrganizer) {
+                return response()->json([
+                    'status' => false,
+                    'message' => 'Unauthorized access',
+                ], 403);
+            }
+
+            // Step 1: Fetch events with category 'Exclusive' only
+            $eventQuery = Event::query();
+
+            if ($isOrganizer) {
+                // Organizer sees only their exclusive events
+                $eventQuery->where('user_id', $loggedInUser->id);
+            }
+
+            // Get the 'Exclusive' category ID
+            $exclusiveCategory = Category::where('title', 'Exclusive')->first();
+
+            if (!$exclusiveCategory) {
+                return response()->json([
+                    'status' => true,
+                    'message' => 'Exclusive category not found',
+                    'data' => []
+                ], 200);
+            }
+
+            // Fetch exclusive events with their tickets
+            $exclusiveEvents = $eventQuery->where('category', $exclusiveCategory->id)
+                ->with(['tickets:id,event_id'])
+                ->get(['id', 'name', 'category']);
+
+            if ($exclusiveEvents->isEmpty()) {
+                return response()->json([
+                    'status' => true,
+                    'message' => 'No exclusive events found',
+                    'data' => []
+                ], 200);
+            }
+			//return $exclusiveEvents;
+            $response = [];
+
+            // Step 2: For each exclusive event, get influencers and their bookings
+            foreach ($exclusiveEvents as $event) {
+                $ticketIds = $event->tickets->pluck('id');
+
+                if ($ticketIds->isEmpty()) {
+                    continue;
+                }
+
+                // Step 3: Fetch all unique influencer IDs (inf_id) from bookings for these tickets
+                $influencers = Booking::whereIn('ticket_id', $ticketIds)
+                    ->whereNotNull('inf_id')
+                    ->distinct()
+                    ->pluck('inf_id')
+                    ->toArray();
+
+                if (empty($influencers)) {
+                    continue;
+                }
+
+                // Step 4: Get influencer-wise booking statistics
+                $influencerData = [];
+
+                foreach ($influencers as $influencerId) {
+                    $bookings = Booking::whereIn('ticket_id', $ticketIds)
+                        ->where('inf_id', $influencerId)
+                        ->with([
+                            'ticket:id,name,event_id', // Load ticket details
+                            'influencer:id,name' // Load influencer details
+                        ])
+                        ->get();
+
+                    if ($bookings->isEmpty()) {
+                        continue;
+                    }
+
+                    // Get influencer name from the relationship
+                    $influencer = $bookings->first()->influencer;
+                    $influencerName = $influencer ? $influencer->name : 'Unknown';
+
+                    // Calculate overall totals
+                    $overallData = [
+                        'influencer_id' => $influencerId,
+                        'influencer_name' => $influencerName,
+                        'total_bookings' => $bookings->count(),
+                        'total_amount' => (float) $bookings->sum('amount'),
+                        'total_discount' => (float) $bookings->sum('discount'),
+                        'total_convenience_fee' => (float) $bookings->sum('convenience_fee'),
+                        'total_base_amount' => (float) $bookings->sum('base_amount'),
+                    ];
+
+                    // Calculate ticket-wise breakdown
+                    $ticketWiseData = [];
+                    $bookingsByTicket = $bookings->groupBy('ticket_id');
+
+                    foreach ($bookingsByTicket as $ticketId => $ticketBookings) {
+                        $ticket = $ticketBookings->first()->ticket;
+
+                        $ticketWiseData[] = [
+                            'ticket_name' => $ticket->name ?? 'Unknown',
+                            'total_bookings' => $ticketBookings->count(),
+                            'total_amount' => (float) $ticketBookings->sum('amount'),
+                            'total_discount' => (float) $ticketBookings->sum('discount'),
+                            'total_convenience_fee' => (float) $ticketBookings->sum('convenience_fee'),
+                            'total_base_amount' => (float) $ticketBookings->sum('base_amount'),
+                        ];
+                    }
+
+                    // Combine overall and ticket-wise data
+                    $influencerData[] = array_merge($overallData, [
+                        'tickets' => $ticketWiseData
+                    ]);
+                }
+
+                if (!empty($influencerData)) {
+                    $response[] = [
+                        'event_id' => $event->id,
+                        'event_name' => $event->name,
+                        'category' => 'Exclusive',
+                        'influencers' => $influencerData,
+                    ];
+                }
+            }
+
+            return response()->json([
+                'status' => true,
+                'data' => $response
+            ], 200);
+        } catch (Exception $e) {
+            return response()->json([
+                'status' => false,
+                'message' => 'Something went wrong: ' . $e->getMessage(),
+                'error' => $e->getMessage()
+            ], 500);
+        }
+    }
+
+
 }

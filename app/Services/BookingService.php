@@ -136,6 +136,8 @@ class BookingService
             // Generate token
             $booking->token = $this->generateHexadecimalCode();
             $booking->session_id = $session;
+          	$booking->inf_id = $request->inf_id ?? null;
+
             $booking->promocode_id = $request->promo_code ?? null;
             $booking->txnid = $txnid;
             $booking->status = 0;
@@ -191,6 +193,8 @@ class BookingService
             $penddingBookingsMaster->booking_id = $masterBookingData;
             $penddingBookingsMaster->session_id = $session;
             $penddingBookingsMaster->user_id = $requestData->user_id;
+          	$penddingBookingsMaster->inf_id = $requestData->inf_id ?? null;
+
             $penddingBookingsMaster->amount = $request->amount ?? 0;
             $penddingBookingsMaster->gateway = $request->gateway ?? 'unknown';
             $penddingBookingsMaster->order_id = $this->generateHexadecimalCode();

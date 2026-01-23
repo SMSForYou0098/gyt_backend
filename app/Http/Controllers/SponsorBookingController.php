@@ -64,7 +64,9 @@ class SponsorBookingController extends Controller
                     $masterBooking->bookings = SponsorBooking::withTrashed()
                         ->whereIn('id', $bookingIds)
                         ->whereBetween('created_at', [$startDate, $endDate])
-                        ->with(['ticket.event.user', 'user:id,name,number,email,photo,reporting_user,company_name,designation'])
+                        ->with(['ticket.event.user', 
+                        'user:id,name,number,email,photo,reporting_user,company_name,designation',
+                        'attendee:id,Seat_Name'])
                         ->latest()
                         ->get()
                         ->map(function ($booking) {
@@ -83,7 +85,7 @@ class SponsorBookingController extends Controller
             });
 
             $normalBookings = SponsorBooking::withTrashed()
-                ->with(['ticket.event.user', 'user:id,name,number,email,photo,reporting_user,company_name,designation'])
+                ->with(['ticket.event.user', 'user:id,name,number,email,photo,reporting_user,company_name,designation','attendee:id,Seat_Name'])
                 ->whereBetween('created_at', [$startDate, $endDate])
                 ->latest()
                 ->get()
@@ -129,7 +131,7 @@ class SponsorBookingController extends Controller
                     $masterBooking->bookings = SponsorBooking::whereIn('id', $bookingIds)
                         ->whereIn('ticket_id', $tickets)
                         ->whereBetween('created_at', [$startDate, $endDate])
-                        ->with(['ticket.event.user', 'user:id,name,number,email,photo,reporting_user,company_name,designation'])
+                        ->with(['ticket.event.user', 'user:id,name,number,email,photo,reporting_user,company_name,designation', 'attendee:id,Seat_Name'])
                         ->latest()
                         ->get()
                         ->map(function ($booking) {
@@ -147,7 +149,7 @@ class SponsorBookingController extends Controller
             });
 
             $normalBookings = SponsorBooking::withTrashed()
-                ->with(['ticket.event.user', 'user:id,name,number,email,photo,reporting_user,company_name,designation'])
+                ->with(['ticket.event.user', 'user:id,name,number,email,photo,reporting_user,company_name,designation', 'attendee:id,Seat_Name'])
                 ->whereIn('ticket_id', $tickets)
                 ->whereBetween('created_at', [$startDate, $endDate])
                 ->latest()
@@ -205,7 +207,7 @@ class SponsorBookingController extends Controller
             });
 
             $normalBookings = SponsorBooking::withTrashed()
-                ->with(['ticket.event.user', 'user:id,name,number,email,photo,reporting_user,company_name,designation'])
+                ->with(['ticket.event.user', 'user:id,name,number,email,photo,reporting_user,company_name,designation', 'attendee:id,Seat_Name'])
                 ->whereIn('sponsor_id', $allSponsorIds)
                 ->whereBetween('created_at', [$startDate, $endDate])
                 ->latest()
@@ -337,7 +339,6 @@ class SponsorBookingController extends Controller
                     }
 
                     $orderId = $booking->token ?? '';
-                    $shortLink =  $orderId;
                     $shortLinksms = "getyourticket.in/t/{$orderId}";
                     $whatsappTemplate = WhatsappApi::where('title', 'Sponsor Booking')->first();
                     $whatsappTemplateName = $whatsappTemplate->template_name ?? '';
@@ -351,7 +352,8 @@ class SponsorBookingController extends Controller
                         'templateName' => 'Sponsor Booking Template',
                         'whatsappTemplateData' => $whatsappTemplateName,
                         'mediaurl' => $mediaurl,
-                        'shortLink' => $shortLink,
+                        'orderId' => $orderId,
+                        'shortLink' => $shortLinksms,
                         'insta_whts_url' =>$event->insta_whts_url ?? 'helloinsta',
                         'values' => [
                             $booking->name,
@@ -472,7 +474,6 @@ class SponsorBookingController extends Controller
                 $whatsappTemplateName = $whatsappTemplate->template_name ?? '';
 
                 $orderId = $agentMasterBooking->order_id ?? '';
-                $shortLink = $orderId;
                 $shortLinksms = "getyourticket.in/t/{$orderId}";
 
                 $eventDateTime = str_replace(',', ' |', $event->date_range) . ' | ' . $event->start_time . ' - ' . $event->end_time;
@@ -483,7 +484,8 @@ class SponsorBookingController extends Controller
                     'number' => $booking->number,
                     'templateName' => 'Sponsor Booking Template',
                     'whatsappTemplateData' => $whatsappTemplateName,
-                    'shortLink' => $shortLink,
+                    'shortLink' => $shortLinksms,
+                    'orderId' => $orderId,
                     'mediaurl' => $mediaurl,
                     'insta_whts_url' =>$event->insta_whts_url ?? 'helloinsta',
                     'values' => [

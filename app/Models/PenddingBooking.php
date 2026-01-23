@@ -18,7 +18,8 @@ class PenddingBooking extends Model
         'status',
         'other',
         'payment_id',
-        'payment_method','booking_type'
+        'payment_method',
+       	'inf_id'
     ];
     
 

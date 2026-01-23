@@ -45,6 +45,8 @@ class EmailTemplateController extends Controller
             return $this->sendScheduleCampaignConfirmation($request, $userEmail, $emailTemplate);
         } else if ($template === 'Login Security Status Update') {
             return $this->sendLoginSecurity($request, $userEmail, $emailTemplate);
+        } else if ($template === 'pending_confirmation') {
+            return $this->pendingBookingConfirmation($request, $userEmail, $emailTemplate);
         }
     }
     private function sendLoginOTPMail($request, $email, $emailTemplate)
@@ -74,11 +76,15 @@ class EmailTemplateController extends Controller
         $subject = $emailTemplate->subject;
         return $this->SendEmail($email, $subject, $body);
     }
-    private function sendPasswordChangeAlert($request, $email, $emailTemplate)
+    private function pendingBookingConfirmation($request, $email, $emailTemplate)
     {
 
         $body = $emailTemplate->body;
-        $body = str_replace(':OTP:', $request->otp, $body);
+        $body = str_replace(
+            [':C_Name', ':Event_Name', ':T_QTY', ':Ticket_Name'],
+            [$request->name, $request->event_name, $request->qty, $request->ticket_name],
+            $body
+        );
         $subject = $emailTemplate->subject;
         return $this->SendEmail($email, $subject, $body);
     }

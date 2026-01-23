@@ -22,7 +22,6 @@ use App\Http\Controllers\CategoryController;
 use App\Http\Controllers\CommissionController;
 use App\Http\Controllers\ComplimentaryBookingController;
 use App\Http\Controllers\ContactUsController;
-use App\Http\Controllers\ContentMasterController;
 use App\Http\Controllers\CorporateBookingController;
 use App\Http\Controllers\CorporateUserController;
 use App\Http\Controllers\DashboardController;
@@ -53,7 +52,6 @@ use App\Http\Controllers\OrganizationTypeController;
 use App\Http\Controllers\PagesController;
 use App\Http\Controllers\PaymentController;
 use App\Http\Controllers\PaymentGatewayController;
-use App\Http\Controllers\PaymentRefundController;
 use App\Http\Controllers\PopUpController;
 use App\Http\Controllers\PosController;
 use App\Http\Controllers\PromoCodeController;
@@ -76,14 +74,16 @@ use App\Http\Controllers\UserInfoController;
 use App\Http\Controllers\UserTicketController;
 use App\Http\Controllers\PhonePeController;
 use App\Http\Controllers\QueryController;
+use App\Http\Controllers\InfluencerController;
+use App\Http\Controllers\EventInfluencerController;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Artisan;
 use Illuminate\Support\Facades\Route;
 
 
 Route::get('/clear', function () {
-    Artisan::call('storage:link');
-    Artisan::call('cache:clear');
+    //Artisan::call('storage:link');
+    //Artisan::call('cache:clear');
     Artisan::call('optimize:clear');
 
     return 'hello';
@@ -115,7 +115,7 @@ Route::middleware(['restrict.ip'])->group(function () {
     Route::get('/settings', [SettingController::class, 'index']);
 
     Route::get('/getAllData', [DashboardController::class, 'getAllData']);
-
+    
 
     // role routes
     Route::get('events', [EventController::class, 'index']);
@@ -144,13 +144,9 @@ Route::middleware(['restrict.ip'])->group(function () {
     Route::get('attendees-chek-in/{orderId}', [ScanController::class, 'attendeesChekIn']);
     Route::post('attendees-verify/{orderId}', [ScanController::class, 'attendeesVerify']);
     Route::get('tickets/{id}', [TicketController::class, 'index']);
-    Route::get('org-events/{organisation}', [EventController::class, 'landingOrgId']);
+ Route::get('org-events/{organisation}', [EventController::class, 'landingOrgId']);
 
     Route::middleware(['auth:api', 'check.status'])->group(function () {
-
-        Route::post('/refund', [PaymentRefundController::class, 'refund']);
-
-        
         Route::get('verify-user-settion', [AuthController::class, 'verifyUserSession']);
         //Dashboard routes
         Route::get('/bookingCount/{id}', [DashboardController::class, 'BookingCounts']);
@@ -159,10 +155,13 @@ Route::middleware(['restrict.ip'])->group(function () {
         Route::get('org/dashbord', [DashboardController::class, 'organizerWeeklyReport']);
         Route::get('/getDashboardSummary/{type}', [DashboardController::class, 'getDashboardSummary']);
         Route::get('/getDashboardOrgTicket', [DashboardController::class, 'getDashboardOrgTicket']);
+      	Route::get('/influencer-wise-bookings', [DashboardController::class, 'getInfluencerWiseBookings']);
+
+      
         Route::get('organizer/summary', [DashboardController::class, 'organizerTotals']);
         Route::get('/payment-log', [DashboardController::class, 'getPaymentLog']);
         Route::delete('/flush-payment-log', [DashboardController::class, 'PaymentLogDelet']);
-
+        Route::get('/event-wise-gateway-sale', [DashboardController::class, 'eventWiseGatewaySale']);
         Route::get('login-history', [LoginHistoryController::class, 'index'])->middleware('permission:View Login History');
 
         // Route::get('/getAllData/{id}', [DashboardController::class, 'getAllData']);
@@ -253,6 +252,30 @@ Route::middleware(['restrict.ip'])->group(function () {
         // Route::post('master-booking/{id}', [BookingController::class, 'master']);
         // Route::post('update-ticket/{id}', [TicketController::class, 'update']);
         Route::get('ticket-info/{id}', [TicketController::class, 'info']);
+      	
+      	// Influencer Routes
+        Route::get('influencers', [InfluencerController::class, 'index']);
+        Route::post('influencers-store', [InfluencerController::class, 'store']);
+        Route::get('influencers-show/{id}', [InfluencerController::class, 'show']);
+        Route::post('influencers-update/{id}', [InfluencerController::class, 'update']);
+        Route::delete('influencers-destroy/{id}', [InfluencerController::class, 'destroy']);
+        Route::post('influencers-restore/{id}', [InfluencerController::class, 'restore']);
+
+        // Event-Influencer Routes
+        Route::get('event/{eventId}/influencers', [EventInfluencerController::class, 'getEventInfluencers']);
+        Route::post('event/{eventId}/influencers/assign', [EventInfluencerController::class, 'assignInfluencer']);
+        Route::post('event/{eventId}/influencers/bulk-assign', [EventInfluencerController::class, 'bulkAssignInfluencers']);
+        Route::delete('event/{eventId}/influencers/{influencerId}', [EventInfluencerController::class, 'removeInfluencer']);
+        Route::delete('event/{eventId}/influencers/bulk-remove', [EventInfluencerController::class, 'bulkRemoveInfluencers']);
+        Route::get('influencer/{influencerId}/events', [EventInfluencerController::class, 'getInfluencerEvents']);
+
+        //booking apprvoval routes
+        Route::post('booking-approval', [EventInfluencerController::class, 'updateApprovalStatus']);
+      
+      
+      
+      
+      
         Route::get('user-ticket-info/{user_id}/{ticket_id}', [TicketController::class, 'userTicketInfo']);
 
 
@@ -282,9 +305,9 @@ Route::middleware(['restrict.ip'])->group(function () {
         Route::get('amusement-user-form-number/{id}', [AmusementAgentBookingController::class, 'userFormNumberAmusement']);
 
         //Agent booking
-        Route::post('agent-book-ticket/{type}/{id}', [AgentController::class, 'store']);
-        Route::post('agent-master-booking/{type}/{id}', [AgentController::class, 'agentMaster']);
-        Route::get('/agents/list/{type}/{id}', [AgentController::class, 'list'])->middleware('permission:View Agent Bookings');
+        Route::post('agent-book-ticket/{id}', [AgentController::class, 'store']);
+        Route::post('agent-master-booking/{id}', [AgentController::class, 'agentMaster']);
+        Route::get('/agents/list/{id}', [AgentController::class, 'list'])->middleware('permission:View Agent Bookings');
         Route::get('user-form-number/{id}', [AgentController::class, 'userFormNumber']);
         Route::get('agent-restore-booking/{token}', [AgentController::class, 'restoreBooking']);
         Route::delete('agent-delete-booking/{token}', [AgentController::class, 'destroy']);
@@ -394,14 +417,6 @@ Route::middleware(['restrict.ip'])->group(function () {
         Route::post('/store-phonepe', [PaymentGatewayController::class, 'storePhonePe']);
         Route::post('/store-cashfree', [PaymentGatewayController::class, 'storeCashfree']);
         Route::post('/test', [PaymentGatewayController::class, 'initiatePayment']);
-
-        // Content Master
-        Route::get('content-master', [ContentMasterController::class, 'index']);
-        Route::post('content-master', [ContentMasterController::class, 'store']);
-        Route::get('content-master/{id}', [ContentMasterController::class, 'show']);
-        Route::post('content-master/{id}', [ContentMasterController::class, 'update']);
-        Route::delete('content-master/{id}', [ContentMasterController::class, 'destroy']);
-        Route::get('content-master/user/{userId}', [ContentMasterController::class, 'getByUser']);
 
         //complimentary
         // Route to store new complimentary bookings
@@ -596,7 +611,7 @@ Route::middleware(['restrict.ip'])->group(function () {
         Route::post('/export-corporateBooking', [CorporateBookingController::class, 'export']);
         Route::post('/export-complimentaryBooking', [ComplimentaryBookingController::class, 'export']);
         Route::get('/export-eventReport', [ReportController::class, 'exportEventReport']);
-        Route::get('/export-AgentReport', [ReportController::class, 'exportAgentReport']);
+        Route::post('/export-agent-report', [ReportController::class, 'exportAgentReport']);
         Route::get('/export-PosReport', [ReportController::class, 'exportPosReport']);
     });
 

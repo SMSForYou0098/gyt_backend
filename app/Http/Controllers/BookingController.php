@@ -22,7 +22,6 @@ use App\Models\PenddingBookingsMaster;
 use App\Models\SponsorBooking;
 use App\Models\SponsorMasterBooking;
 use App\Models\Ticket;
-use App\Models\WhatsappApi;
 use Auth;
 use Illuminate\Http\Request;
 use Illuminate\Support\Carbon;
@@ -33,7 +32,9 @@ use App\Services\PermissionService;
 use App\Services\SmsService;
 use App\Services\WhatsappService;
 use Illuminate\Database\Eloquent\SoftDeletes;
+use App\Models\WhatsappApi;
 use Illuminate\Support\Facades\Mail;
+
 
 class BookingController extends Controller
 {
@@ -413,6 +414,9 @@ class BookingController extends Controller
 
             // Master bookings query
             $Masterbookings = MasterBooking::withTrashed()
+                ->with([
+                    'user:id,name,number,email',
+                ])
                 ->where('agent_id', null)
                 ->whereBetween('created_at', [$startDate, $endDate])
                 ->latest()
@@ -424,9 +428,13 @@ class BookingController extends Controller
             // Get relevant bookings in bulk
             $bookingQuery = Booking::withTrashed()
                 ->with([
-                    'ticket.event.user',
-                    'user:id,name,number,email,photo,reporting_user,company_name,designation',
-                    'attendee'
+                    'user:id,name,number,email',
+                    'ticket:id,event_id,name,background_image',
+                    'ticket.event:id,name,category,date_range,address,start_time,entry_time,user_id',
+                    'ticket.event.user:id,name,organisation',
+                    'ticket.event.Category:id,title',
+                    'influencer:id,name',
+                    'attendee:id,name'
                 ])
                 ->whereBetween('created_at', [$startDate, $endDate])
                 ->where('agent_id', null);
@@ -445,7 +453,7 @@ class BookingController extends Controller
             $bookingsMap = $bookings->keyBy('id');
 
             // Attach bookings to master bookings
-            $Masterbookings->each(function ($masterBooking) use (&$allBookingIds, $bookingsMap) {
+            $Masterbookings->each(function ($masterBooking) use ($bookingsMap) {
                 $bookingIds = $masterBooking->booking_id ?? [];
                 $masterBooking->bookings = collect();
 
@@ -467,13 +475,16 @@ class BookingController extends Controller
                 $masterBooking->is_deleted = $masterBooking->trashed();
             });
 
-            // Normal bookings not in MasterBookings
+            // First, add is_deleted to all bookings while they're still models
+            $bookings->each(function ($booking) {
+                $booking->is_deleted = $booking->trashed();
+            });
+
             $normalBookings = $bookings->reject(function ($booking) use ($allBookingIds) {
                 return in_array($booking->id, $allBookingIds);
             })->map(function ($booking) {
                 $booking->event_name = $booking->ticket->event->name ?? '';
                 $booking->organizer = $booking->ticket->event->user->name ?? '';
-                $booking->is_deleted = $booking->trashed();
                 $booking->quantity = 1;
                 return $booking;
             });
@@ -505,7 +516,7 @@ class BookingController extends Controller
                 // 'bookings' => $sortedCombinedBookings,
             ]);
         } catch (\Exception $e) {
-            \Log::error('AdminBookings Error: ' . $e->getMessage());
+            Log::error('AdminBookings Error: ' . $e->getMessage());
             return response()->json([
                 'status' => false,
                 'error' => $e->getMessage() . ' on line ' . $e->getLine(),
@@ -971,12 +982,12 @@ class BookingController extends Controller
 
     public function restoreBooking($id, $token)
     {
-        if (!auth()->check() || !auth()->user()->hasRole('Admin')) {
-            return response()->json([
-                'status' => false,
-                'message' => 'Unauthorized access. Only admin can restore booking.'
-            ], 403);
-        }
+     if (!auth()->check() || !auth()->user()->hasRole('Admin')) {
+        return response()->json([
+            'status' => false,
+            'message' => 'Unauthorized access. Only admin can restore booking.'
+        ], 403);
+    }
         $Masterbookings = MasterBooking::withTrashed()
             ->where('id', $id)
             ->where('order_id', $token)
@@ -1022,91 +1033,17 @@ class BookingController extends Controller
         }
     }
 
-    // public function export(Request $request)
-    // {
-    //     $loggedInUser = Auth::user();
-    //     $Attendee = $request->input('user_id');
-    //     $eventName = $request->input('ticket_id');
-    //     $status = $request->input('status');
-    //     $dates = $request->input('date') ? explode(',', $request->input('date')) : [Carbon::today()->format('Y-m-d')];
-
-    //     $query = Booking::with(['userData', 'ticket.event.user']);
-
-    //     if ($loggedInUser->hasRole('Admin')) {
-    //         // Admin sees all
-    //     } elseif ($loggedInUser->hasRole('Organizer')) {
-    //         $query->whereHas('ticket.event', function ($q) use ($loggedInUser) {
-    //             $q->where('user_id', $loggedInUser->id);
-    //         });
-    //     } elseif ($loggedInUser->hasRole('Agent')) {
-    //         $query->where('agent_id', $loggedInUser->id);
-    //     } else {
-    //         return response()->json([
-    //             'status' => false,
-    //             'message' => 'Unauthorized access'
-    //         ], 403);
-    //     }
-
-    //     if ($request->has('ticket_id')) {
-    //         $query->where('ticket_id', $eventName);
-    //     }
-
-    //     if ($request->has('user_id')) {
-    //         $query->where('user_id', $Attendee);
-    //     }
-
-    //     if ($request->has('status')) {
-    //         $query->where('status', $status);
-    //     }
-
-    //     if ($dates) {
-    //         if (count($dates) === 1) {
-    //             $singleDate = Carbon::parse($dates[0])->toDateString();
-    //             $query->whereDate('created_at', $singleDate);
-    //         } elseif (count($dates) === 2) {
-    //             $startDate = Carbon::parse($dates[0])->startOfDay();
-    //             $endDate = Carbon::parse($dates[1])->endOfDay();
-    //             $query->whereBetween('created_at', [$startDate, $endDate]);
-    //         }
-    //     }
-
-    //     $bookings = $query->with(['userData', 'ticket.event.user'])->get();
-
-    //     // ✅ Group by session_id and count qty
-    //     $groupedBookings = $bookings->groupBy('session_id')->map(function ($group) {
-    //         $first = $group->first();
-
-    //         return [
-    //             'event_name'     => $first->ticket->event->name ?? 'N/A',
-    //             'org_name'       => $first->ticket->event->user->name ?? 'N/A',
-    //             'attendee'       => $first->userData->name ?? 'No User',
-    //             'number'         => $first->number ?? '',
-    //             'ticket_name'    => $first->ticket->name ?? '',
-    //             'quantity'       => $group->count(), // ✅ Qty = records with same session_id
-    //             'discount'       => $first->discount ?? 0,
-    //             'base_amount'    => $first->base_amount ?? 0,
-    //             'amount'         => $first->amount ?? 0,
-    //             'status'         => $first->status,
-    //             'disabled'       => $first->disabled,
-    //             'created_at'     => $first->created_at,
-    //             'gateway'     => $first->gateway ?? 'N/A',
-    //             'payment_id'     => $first->payment_id ?? 'N/A',
-    //             'deleted_at'     => $first->deleted_at ?? 'N/A',
-    //         ];
-    //     })->values();
-
-    //     return Excel::download(new BookingExport($groupedBookings), 'Booking_export.xlsx');
-    // }
-
-    public function export(Request $request)
+   
+  
+     public function export(Request $request)
     {
         $Attendee = $request->input('user_id');
         $eventName = $request->input('ticket_id');
         $status = $request->input('status');
         $dates = $request->input('date') ? explode(',', $request->input('date')) : [Carbon::today()->format('Y-m-d')];
-        $search = $request->input('search');
-        // $query = Booking::query();
-        $query = Booking::withTrashed();
+
+       // $query = Booking::query();
+      $query = Booking::withTrashed();
 
 
         if ($request->has('ticket_id')) {
@@ -1132,20 +1069,6 @@ class BookingController extends Controller
             }
         }
 
-        // if ($search) {
-        //     $query->where(function ($q) use ($search) {
-        //         $q->whereHas('userData', function ($q2) use ($search) {
-        //             $q2->where('name', 'like', "%$search%");
-        //         })
-        //             ->orWhereHas('ticket', function ($q3) use ($search) {
-        //                 $q3->where('name', 'like', "%$search%")
-        //                     ->orWhereHas('event', function ($q4) use ($search) {
-        //                         $q4->where('name', 'like', "%$search%");
-        //                     });
-        //             });
-        //     });
-        // }
-
         $bookings = $query->with(['userData', 'ticket.event.user'])->get();
 
         // ✅ Group by session_id and count qty
@@ -1165,18 +1088,18 @@ class BookingController extends Controller
                 'status'         => $first->status,
                 'disabled'       => $first->disabled,
                 'created_at'     => $first->created_at,
-                'gateway'     => $first->gateway ?? 'N/A',
+              'gateway'     => $first->gateway ?? 'N/A',
                 'payment_id'     => $first->payment_id ?? 'N/A',
-                'deleted_at'     => $first->deleted_at,
-                'is_refunded'     => $first->is_refunded,
+              'deleted_at'     => $first->deleted_at,
+              'is_refunded'     => $first->is_refunded,
                 'refunded_at'     => $first->refunded_at,
-
+             
             ];
         })->values();
 
         return Excel::download(new BookingExport($groupedBookings), 'Booking_export.xlsx');
     }
-
+  
     public function imagesRetrive(Request $request)
     {
         $fullImagePath = $request->input('path');
@@ -1542,67 +1465,7 @@ class BookingController extends Controller
             'agent_bookings' => $agentBookings,
         ], 200);
     }
-
-
-    // public function refunded(Request $request, $id, $token, WhatsappService $whatsappService)
-    // {
-    //     $isMaster = $request->query('isMaster', false);
-    //     if ($isMaster) {
-    //         $Masterbookings = MasterBooking::withTrashed()
-    //             ->where('order_id', $token)
-    //             ->latest()
-    //             ->first();
-
-    //         // Get the booking IDs (array or JSON)
-    //         $bookingIds = is_array($Masterbookings->booking_id)
-    //             ? $Masterbookings->booking_id
-    //             : json_decode($Masterbookings->booking_id, true);
-
-    //         // Mark related bookings as refunded
-    //         if (!empty($bookingIds) && is_array($bookingIds)) {
-    //             $bookings = Booking::withTrashed()->whereIn('id', $bookingIds)->get();
-
-    //             foreach ($bookings as $booking) {
-    //                 $booking->is_refunded = 1;
-    //                 $booking->refunded_at = now();
-    //                 $booking->deleted_at = now();
-    //                 $booking->save(); // safe update without mass assignment
-    //             }
-    //         }
-
-    //         // Mark the master booking as refunded
-    //         $Masterbookings->is_refunded = 1;
-    //         $Masterbookings->refunded_at = now();
-    //         $Masterbookings->deleted_at = now();
-    //         $Masterbookings->save();
-
-    //         return response()->json([
-    //             'status' => true,
-    //             'message' => 'Master Booking and related bookings refunded successfully'
-    //         ], 200);
-    //     } else {
-    //         // If no MasterBooking, try to find a normal booking
-    //         $normalBooking = Booking::withTrashed()->where('token', $token)->first();
-
-    //         if ($normalBooking) {
-    //             $normalBooking->is_refunded = 1;
-    //             $normalBooking->refunded_at = now();
-    //             $normalBooking->deleted_at = now();
-    //             $normalBooking->save();
-
-    //             return response()->json([
-    //                 'status' => true,
-    //                 'message' => 'Booking refunded successfully'
-    //             ], 200);
-    //         } else {
-    //             return response()->json([
-    //                 'status' => false,
-    //                 'message' => 'Booking not found'
-    //             ], 404);
-    //         }
-    //     }
-    // }
-
+  
     public function refunded(Request $request, $id, $token, WhatsappService $whatsappService)
     {
         $isMaster = filter_var(
@@ -1685,59 +1548,4 @@ class BookingController extends Controller
             'message' => 'Booking refunded successfully'
         ], 200);
     }
-
-
-    // protected function sendRefundNotification(Booking $booking,  WhatsappService $whatsappService)
-    // {
-    //     $ticket = $booking->ticket;
-    //     $event = $ticket->event;
-
-    //     $whatsappTemplate = WhatsappApi::where('title', 'refund confirmation')->first();
-    //     $whatsappTemplateName = $whatsappTemplate->template_name ?? '';
-
-    //     $shortLink = $booking->token;
-    //     $shortLinksms = "getyourticket.in/t/{$booking->token}";
-
-    //     $socialMessage = 'Follow Us on Social Media for Future Event Updates and Offers. WhatsApp: wa.gyt.co.in | Facebook: fb.gyt.co.in';
-
-    //     $dates = explode(',', $event->date_range);
-    //     $formattedDates = [];
-    //     foreach ($dates as $date) {
-    //         $formattedDates[] = \Carbon\Carbon::parse($date)->format('d-m-Y');
-    //     }
-    //     $eventDateTime = implode(' | ', $formattedDates) . ' | ' . $event->start_time . ' - ' . $event->end_time;
-
-    //     $data = (object)[
-    //         'name' => $booking->name,
-    //         'number' => $booking->number,
-    //         'email' => $booking->email,
-    //         'templateName' => 'Refund Notification Template',
-    //         'whatsappTemplateData' => $whatsappTemplateName,
-    //         'shortLink' => $shortLink,
-    //         'insta_whts_url' => $event->insta_whts_url ?? '',
-    //         'mediaurl' => $event->thumbnail,
-    //         'values' => [
-    //             $booking->name ?? 'Guest',
-    //             $event->name ?? 'Event',
-    //             $socialMessage,
-    //         ],
-    //         'replacements' => [
-    //             ':C_Name' => $booking->name,
-    //             ':Event_Name' => $event->name,
-    //             ':Event_Description' => $socialMessage,
-
-    //         ]
-    //     ];
-
-    //     // Send SMS
-    //     // $smsService->send($data);
-
-    //     // Send WhatsApp
-    //     $whatsappService->send($data);
-
-    //     // Send Email
-    //     //if ($booking->email) {
-    //     //    Mail::to($booking->email)->send(new RefundBookingMail($booking));
-    //     //}
-    // }
 }

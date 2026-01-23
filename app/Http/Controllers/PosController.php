@@ -5,9 +5,6 @@ namespace App\Http\Controllers;
 use App\Exports\PosExport;
 use App\Models\PosBooking;
 use App\Models\Ticket;
-use App\Models\WhatsappApi;
-use App\Services\SmsService;
-use App\Services\WhatsappService;
 use Carbon\Carbon;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Auth;
@@ -80,13 +77,22 @@ class PosController extends Controller
         ], 200);
     }
 
-    public function create(Request $request, $id, SmsService $smsService, WhatsappService $whatsappService)
+    public function create(Request $request, $id)
     {
-        try {;
+        try {
+            // return response()->json(['bookings' => $request->tickets[0]['id']], 201);
             $booking = new PosBooking();
 
             $ticket = Ticket::findOrFail($request->tickets[0]['id']);
             $event = $ticket->event;
+
+            // if ($event->rfid_required == 1) {
+            //     $booking->token = $this->generateHexadecimalCode();
+            // } else {
+            //     $booking->token = $this->generateRandomCode();
+            // }
+
+            // $booking->token = $this->generateRandomCode();
             $booking->token = $this->generateHexadecimalCode();
             $booking->user_id = $request->user_id;
             $booking->ticket_id = $request->tickets[0]['id'];
@@ -102,58 +108,6 @@ class PosController extends Controller
             $booking->status = 0;
             $booking->save();
             $booking->load('ticket');
-
-            /* ---------------- DATE FORMAT ---------------- */
-            $dates = explode(',', $event->date_range);
-            $formattedDates = [];
-
-            foreach ($dates as $date) {
-                $formattedDates[] = \Carbon\Carbon::parse($date)->format('d-m-Y');
-            }
-
-            $eventDateTime = implode(' | ', $formattedDates)
-                . ' | ' . $event->start_time . ' - ' . $event->end_time;
-
-            /* ---------------- TEMPLATE DATA ---------------- */
-            $whatsappTemplate = WhatsappApi::where('title', 'Agent Booking')->first();
-            $whatsappTemplateName = $whatsappTemplate->template_name ?? '';
-
-            $orderId = $booking->token;
-            $shortLinksms = "getyourticket.in/t/{$orderId}";
-
-            $data = (object) [
-                'name' => $booking->name,
-                'number' => $booking->number,
-                'templateName' => 'Agent Booking Template',
-                'whatsappTemplateData' => $whatsappTemplateName,
-                'shortLink' => $orderId,
-                'insta_whts_url' => $event->insta_whts_url ?? '',
-                'mediaurl' => $event->thumbnail,
-                'values' => [
-                    (string) ($booking->name ?? 'Guest'),
-                    (string) ($booking->number ?? '0000000000'),
-                    (string) ($event->name ?? 'Event'),
-                    (string) ($booking->quantity ?? '1'),
-                    (string) ($ticket->name ?? 'Ticket'),
-                    (string) ($event->address ?? 'Venue'),
-                    (string) ($eventDateTime ?? 'DateTime'),
-                    (string) ($event->whts_note ?? ''),
-                ],
-                'replacements' => [
-                    ':C_Name'       => $booking->name,
-                    ':T_QTY'        => $booking->quantity,
-                    ':Ticket_Name'  => $ticket->name,
-                    ':Event_Name'   => $event->name,
-                    ':Event_Date'   => $eventDateTime,
-                    ':S_Link'       => $shortLinksms,
-                ]
-            ];
-
-            /* ---------------- SEND SMS + WHATSAPP ---------------- */
-            $smsService->send($data);
-            $whatsappService->send($data);
-
-
             return response()->json(['status' => true, 'message' => 'Post Tickets Booked Successfully', 'bookings' => $booking], 201);
         } catch (\Exception $e) {
             return response()->json(['status' => false, 'message' => 'Failed to book tickets', 'error' => $e->getMessage()], 500);
@@ -242,13 +196,13 @@ class PosController extends Controller
         // return response()->json(['Booking' => $PosBooking]);
         return Excel::download(new PosExport($PosBooking), 'PosBooking_export.xlsx');
     }
-
+    
     public function posDataByNumber($number)
     {
         $booking = PosBooking::select('name', 'number')
-            ->where('number', $number)
-            ->latest()
-            ->first();
+        ->where('number', $number)
+        ->latest()
+        ->first();    
 
         if ($booking) {
             return response()->json(['status' => true, 'data' => $booking], 200);

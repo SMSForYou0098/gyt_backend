@@ -86,7 +86,8 @@ class EventController extends Controller
         $sortedEvents->transform(function ($event) {
             $activeTickets = $event->tickets->where('status', 1);
             $event->lowest_ticket_price = $activeTickets->min('price');
-            if ($event->lowest_ticket_price === null) {
+            if($event->lowest_ticket_price === null)
+            {
                 $event->ticket_close = 'Booking Closed';
             }
             // $event->lowest_ticket_price = $event->tickets->min('price');
@@ -242,7 +243,8 @@ class EventController extends Controller
         $sortedEvents->transform(function ($event) {
             $activeTickets = $event->tickets->where('status', 1);
             $event->lowest_ticket_price = $activeTickets->min('price');
-            if ($event->lowest_ticket_price === null) {
+            if($event->lowest_ticket_price === null)
+            {
                 $event->ticket_close = 'Booking Closed';
             }
             // $event->lowest_ticket_price = $event->tickets->min('price');
@@ -304,7 +306,7 @@ class EventController extends Controller
         return response()->json(['status' => true, 'events' => $events], 200);
     }
 
-    public function eventList($id)
+   public function eventList($id)
     {
         $loggedInUser = Auth::user()->load('reportingUser');
         $today = Carbon::today()->toDateString();
@@ -374,247 +376,9 @@ class EventController extends Controller
 
         return response()->json(['status' => true, 'events' => $events], 200);
     }
-
-    // public function eventList($id)
-    // {
-    //     $loggedInUser = Auth::user()->load('reportingUser');
-    //     $today = Carbon::today()->toDateString();
-
-    //     if ($loggedInUser->hasRole('Admin')) {
-    //         // Admin gets all events
-    //         $eventsQuery = Event::query();
-    //     } else {
-    //         // POS user logic
-    //         $reporting_user = $loggedInUser->reportingUser;
-    //         $reporting_userAdmin = $reporting_user->roles->pluck('name')->first();
-
-    //         // Filter only today's events for POS
-    //         $eventsQuery = Event::query()->where(function ($query) use ($loggedInUser, $reporting_user, $reporting_userAdmin) {
-    //             $query->where('user_id', $loggedInUser->id);
-
-    //             if ($reporting_userAdmin != 'Admin') {
-    //                 $query->orWhere('user_id', $reporting_user->id);
-    //             }
-    //         })->where(function ($query) use ($today) {
-    //             $query->whereDate(DB::raw("SUBSTRING_INDEX(date_range, ',', 1)"), '<=', $today)
-    //                 ->where(function ($sub) use ($today) {
-    //                     $sub->whereDate(DB::raw("SUBSTRING_INDEX(date_range, ',', -1)"), '>=', $today)
-    //                         ->orWhereRaw("date_range NOT LIKE '%,%' AND DATE(date_range) = ?", [$today]);
-    //                 });
-    //         });
-    //     }
-
-    //     $events = $eventsQuery
-    //         ->select('id', 'user_id', 'category', 'name', 'date_range', 'created_at', 'event_type', 'event_key')
-    //         ->with([
-    //             'tickets:id,event_id,price,sale_price',
-    //             'user:id,name',
-    //             'Category:id,title'
-    //         ])
-    //         ->orderBy('created_at', 'desc')
-    //         ->get();
-
-    //     // Process tickets for price info
-    //     foreach ($events as $event) {
-    //         $event->lowest_ticket_price = $event->tickets->min('price') ?? 0;
-    //         $event->lowest_sale_price = $event->tickets->min('sale_price') ?? 0;
-    //     }
-
-    //     return response()->json(['status' => true, 'events' => $events], 200);
-    // }
-
-    // public function eventByUser(Request $request, $id)
-    // {
-    //     $bookingType = $request->type;
-    //     $isPos = $request->isPos;
-    //     // return response()->json($bookingType);
-    //     $loggedInUser = Auth::user();
-    //     $today = Carbon::today()->toDateString();
-
-    //     if ($loggedInUser && $loggedInUser->hasRole('Agent') || $loggedInUser && $loggedInUser->hasRole('Sponsor') || $loggedInUser && $loggedInUser->hasRole('Accreditation')) {
-
-    //         $agentEvent = AgentEvent::where('user_id', $loggedInUser->id)->first();
-    //         if ($agentEvent && $agentEvent->event_id) {
-    //             $eventIds = json_decode($agentEvent->event_id, true);
-    //             $eventsQuery = Event::whereIn('id', $eventIds)->with('tickets', 'user');
-
-
-    //             if ($bookingType) {
-    //                 $bookingField = match ($bookingType) {
-    //                     'online' => 'online_booking',
-    //                     'agent' => 'agent_booking',
-    //                     'sponsor' => 'sponsor_booking',
-    //                     'pos' => 'pos_booking',
-    //                     'complimentary' => 'complimentary_booking',
-    //                     'exhibition' => 'exhibition_booking',
-    //                     'amusement' => 'amusement_booking',
-    //                     default => null
-    //                 };
-
-    //                 if ($bookingField) {
-    //                     $eventsQuery->where($bookingField, 1);
-    //                 }
-    //             }
-    //             //$events = $eventsQuery->get();
-    //             $events = $eventsQuery->get()->filter(function ($event) use ($today, $loggedInUser) {
-    //                 $dateRange = explode(',', $event->date_range);
-
-    //                 if (count($dateRange) == 1) {
-    //                     $eventDate = Carbon::parse(trim($dateRange[0]));
-
-    //                     if ($loggedInUser->hasRole('Admin')) {
-    //                         return true;
-    //                     } else {
-    //                         return $eventDate->toDateString() === $today;
-    //                     }
-    //                 } elseif (count($dateRange) == 2) {
-    //                     $startDate = Carbon::parse(trim($dateRange[0]));
-    //                     $endDate = Carbon::parse(trim($dateRange[1]));
-
-    //                     if ($loggedInUser->hasRole('Admin')) {
-    //                         return true;
-    //                     } else {
-    //                         return $today >= $startDate->toDateString() && $today <= $endDate->toDateString();
-    //                     }
-    //                 }
-
-    //                 return false;
-    //             });
-
-    //             // Process events
-    //             foreach ($events as $event) {
-    //                 $dateRange = explode(',', $event->date_range);
-
-    //                 if (count($dateRange) == 1) {
-    //                     // Single day event
-    //                     $eventDate = Carbon::parse(trim($dateRange[0]));
-
-    //                     if ($today == $eventDate->toDateString()) {
-    //                         $event->event_status = 1; // Ongoing
-    //                     } elseif ($today < $eventDate->toDateString()) {
-    //                         $event->event_status = 2; // Upcoming
-    //                     } else {
-    //                         $event->event_status = 3; // Past
-    //                     }
-    //                 } else {
-    //                     // Multi-day event
-    //                     $startDate = Carbon::parse(trim($dateRange[0]));
-    //                     $endDate = Carbon::parse(trim($dateRange[1]));
-
-    //                     if ($today >= $startDate->toDateString() && $today <= $endDate->toDateString()) {
-    //                         $event->event_status = 1; // Ongoing
-    //                     } elseif ($today < $startDate->toDateString()) {
-    //                         $event->event_status = 2; // Upcoming
-    //                     } else {
-    //                         $event->event_status = 3; // Past
-    //                     }
-    //                 }
-
-    //                 // Get the lowest ticket price
-    //                 $event->lowest_ticket_price = $event->tickets->min('price') ?? 0;
-    //                 $event->lowest_sale_price = $event->tickets->min('sale_price') ?? 0;
-    //             }
-    //             $events = $events->filter(fn($event) => $event->event_status === 1 || $event->event_status === 2);
-    //             return response()->json(['status' => true, 'events' => $events->values()], 200);
-    //         } else {
-    //             return response()->json(['status' => false, 'message' => 'No events found for this agent'], 200);
-    //         }
-    //     } else {
-    //         if ($loggedInUser->hasRole('Admin')) {
-    //             $eventsQuery = Event::with('tickets', 'user');
-    //         } else {
-    //             $reporting_user = $loggedInUser->reporting_user;
-    //             $eventsQuery = Event::where('user_id', $id)
-    //                 ->orWhere('user_id', $reporting_user)
-    //                 ->with('tickets', 'user');
-    //         }
-
-    //         if ($bookingType) {
-    //             $bookingField = match ($bookingType) {
-    //                 'online' => 'online_booking',
-    //                 'agent' => 'agent_booking',
-    //                 'sponsor' => 'sponsor_booking',
-    //                 'pos' => 'pos_booking',
-    //                 'complimentary' => 'complimentary_booking',
-    //                 'exhibition' => 'exhibition_booking',
-    //                 'amusement' => 'amusement_booking',
-    //                 default => null
-    //             };
-
-    //             if ($bookingField) {
-    //                 $eventsQuery->where($bookingField, 1);
-    //             }
-    //         }
-    //         //$events = $eventsQuery->get();
-    //         $events = $eventsQuery->get()->filter(function ($event) use ($today, $loggedInUser) {
-    //             $dateRange = explode(',', $event->date_range);
-
-    //             if (count($dateRange) == 1) {
-    //                 $eventDate = Carbon::parse(trim($dateRange[0]));
-
-    //                 if ($loggedInUser->hasRole('Admin')) {
-    //                     return true;
-    //                 } else {
-    //                     return $eventDate->toDateString() === $today;
-    //                 }
-    //             } elseif (count($dateRange) == 2) {
-    //                 $startDate = Carbon::parse(trim($dateRange[0]));
-    //                 $endDate = Carbon::parse(trim($dateRange[1]));
-
-    //                 if ($loggedInUser->hasRole('Admin')) {
-    //                     return true;
-    //                 } else {
-    //                     return $today >= $startDate->toDateString() && $today <= $endDate->toDateString();
-    //                 }
-    //             }
-
-    //             return false;
-    //         });
-
-    //         // Process events
-    //         foreach ($events as $event) {
-    //             $dateRange = explode(',', $event->date_range);
-
-    //             if (count($dateRange) == 1) {
-    //                 // Single day event
-    //                 $eventDate = Carbon::parse(trim($dateRange[0]));
-
-    //                 if ($today == $eventDate->toDateString()) {
-    //                     $event->event_status = 1; // Ongoing
-    //                 } elseif ($today < $eventDate->toDateString()) {
-    //                     $event->event_status = 2; // Upcoming
-    //                 } else {
-    //                     $event->event_status = 3; // Past
-    //                 }
-    //             } else {
-    //                 // Multi-day event
-    //                 $startDate = Carbon::parse(trim($dateRange[0]));
-    //                 $endDate = Carbon::parse(trim($dateRange[1]));
-
-    //                 if ($today >= $startDate->toDateString() && $today <= $endDate->toDateString()) {
-    //                     $event->event_status = 1; // Ongoing
-    //                 } elseif ($today < $startDate->toDateString()) {
-    //                     $event->event_status = 2; // Upcoming
-    //                 } else {
-    //                     $event->event_status = 3; // Past
-    //                 }
-    //             }
-
-    //             Log::info('Event ID: ' . $event->id . ' - Date Range: ' . $event->date_range . ' - Status: ' . $event->event_status);
-
-
-
-    //             // Get the lowest ticket price
-    //             $event->lowest_ticket_price = $event->tickets->min('price') ?? 0;
-    //             $event->lowest_sale_price = $event->tickets->min('sale_price') ?? 0;
-    //         }
-    //         $events = $events->filter(fn($event) => $event->event_status == 1 || $event->event_status == 2);
-    //         return response()->json(['status' => true, 'events' => $events->values()], 200);
-    //     }
-    // }
     public function eventByUser(Request $request, $id)
     {
-
+        
         $bookingType = $request->type;
         $loggedInUser = Auth::user();
         $today = Carbon::today()->toDateString();
@@ -713,189 +477,7 @@ class EventController extends Controller
     }
 
 
-    // public function eventByUser(Request $request, $id)
-    // {
-    //     $bookingType = $request->type;
-    //     // return response()->json($bookingType);
-    //     $loggedInUser = Auth::user();
-    //     $today = Carbon::today()->toDateString();
-
-    //     if ($loggedInUser && $loggedInUser->hasRole('Agent') || $loggedInUser && $loggedInUser->hasRole('Sponsor') || $loggedInUser && $loggedInUser->hasRole('Accreditation')) {
-
-    //         $agentEvent = AgentEvent::where('user_id', $loggedInUser->id)->first();
-    //         if ($agentEvent && $agentEvent->event_id) {
-    //             $eventIds = json_decode($agentEvent->event_id, true);
-    //             $eventsQuery = Event::whereIn('id', $eventIds)->with('tickets', 'user');
-
-
-    //             if ($bookingType) {
-    //                 $bookingField = match ($bookingType) {
-    //                     'online' => 'online_booking',
-    //                     'agent' => 'agent_booking',
-    //                     'sponsor' => 'sponsor_booking',
-    //                     'pos' => 'pos_booking',
-    //                     'complimentary' => 'complimentary_booking',
-    //                     'exhibition' => 'exhibition_booking',
-    //                     'amusement' => 'amusement_booking',
-    //                     default => null
-    //                 };
-
-    //                 if ($bookingField) {
-    //                     $eventsQuery->where($bookingField, 1);
-    //                 }
-    //             }
-
-    //             $events = $eventsQuery->get()->filter(function ($event) use ($today, $loggedInUser) {
-    //                 $dateRange = explode(',', $event->date_range);
-
-    //                 if (count($dateRange) == 1) {
-    //                     $eventDate = Carbon::parse(trim($dateRange[0]));
-
-    //                     if ($loggedInUser->hasRole('Admin')) {
-    //                         return true;
-    //                     } else {
-    //                         return $eventDate->toDateString() === $today;
-    //                     }
-    //                 } elseif (count($dateRange) == 2) {
-    //                     $startDate = Carbon::parse(trim($dateRange[0]));
-    //                     $endDate = Carbon::parse(trim($dateRange[1]));
-
-    //                     if ($loggedInUser->hasRole('Admin')) {
-    //                         return true;
-    //                     } else {
-    //                         return $today >= $startDate->toDateString() && $today <= $endDate->toDateString();
-    //                     }
-    //                 }
-
-    //                 return false;
-    //             });
-
-    //             // Process events
-    //             foreach ($events as $event) {
-    //                 $dateRange = explode(',', $event->date_range);
-
-    //                 if (count($dateRange) == 1) {
-    //                     // Single day event
-    //                     $eventDate = Carbon::parse(trim($dateRange[0]));
-
-    //                     if ($today == $eventDate->toDateString()) {
-    //                         $event->event_status = 1; // Ongoing
-    //                     } elseif ($today < $eventDate->toDateString()) {
-    //                         $event->event_status = 2; // Upcoming
-    //                     } else {
-    //                         $event->event_status = 3; // Past
-    //                     }
-    //                 } else {
-    //                     // Multi-day event
-    //                     $startDate = Carbon::parse(trim($dateRange[0]));
-    //                     $endDate = Carbon::parse(trim($dateRange[1]));
-
-    //                     if ($today >= $startDate->toDateString() && $today <= $endDate->toDateString()) {
-    //                         $event->event_status = 1; // Ongoing
-    //                     } elseif ($today < $startDate->toDateString()) {
-    //                         $event->event_status = 2; // Upcoming
-    //                     } else {
-    //                         $event->event_status = 3; // Past
-    //                     }
-    //                 }
-
-    //                 // Get the lowest ticket price
-    //                 $event->lowest_ticket_price = $event->tickets->min('price') ?? 0;
-    //                 $event->lowest_sale_price = $event->tickets->min('sale_price') ?? 0;
-    //             }
-
-    //             return response()->json(['status' => true, 'events' => $events->values()], 200);
-    //         } else {
-    //             return response()->json(['status' => false, 'message' => 'No events found for this agent'], 200);
-    //         }
-    //     } else {
-    //         if ($loggedInUser->hasRole('Admin')) {
-    //             $eventsQuery = Event::with('tickets', 'user');
-    //         } else {
-    //             $reporting_user = $loggedInUser->reporting_user;
-    //             $eventsQuery = Event::where('user_id', $id)
-    //                 ->orWhere('user_id', $reporting_user)
-    //                 ->with('tickets', 'user');
-    //         }
-
-    //         if ($bookingType) {
-    //             $bookingField = match ($bookingType) {
-    //                 'online' => 'online_booking',
-    //                 'agent' => 'agent_booking',
-    //                 'sponsor' => 'sponsor_booking',
-    //                 'pos' => 'pos_booking',
-    //                 'complimentary' => 'complimentary_booking',
-    //                 'exhibition' => 'exhibition_booking',
-    //                 'amusement' => 'amusement_booking',
-    //                 default => null
-    //             };
-
-    //             if ($bookingField) {
-    //                 $eventsQuery->where($bookingField, 1);
-    //             }
-    //         }
-
-    //         $events = $eventsQuery->get()->filter(function ($event) use ($today, $loggedInUser) {
-    //             $dateRange = explode(',', $event->date_range);
-
-    //             if (count($dateRange) == 1) {
-    //                 $eventDate = Carbon::parse(trim($dateRange[0]));
-
-    //                 if ($loggedInUser->hasRole('Admin')) {
-    //                     return true;
-    //                 } else {
-    //                     return $eventDate->toDateString() === $today;
-    //                 }
-    //             } elseif (count($dateRange) == 2) {
-    //                 $startDate = Carbon::parse(trim($dateRange[0]));
-    //                 $endDate = Carbon::parse(trim($dateRange[1]));
-
-    //                 if ($loggedInUser->hasRole('Admin')) {
-    //                     return true;
-    //                 } else {
-    //                     return $today >= $startDate->toDateString() && $today <= $endDate->toDateString();
-    //                 }
-    //             }
-
-    //             return false;
-    //         });
-    //         // Process events
-    //         foreach ($events as $event) {
-    //             $dateRange = explode(',', $event->date_range);
-
-    //             if (count($dateRange) == 1) {
-    //                 // Single day event
-    //                 $eventDate = Carbon::parse(trim($dateRange[0]));
-
-    //                 if ($today == $eventDate->toDateString()) {
-    //                     $event->event_status = 1; // Ongoing
-    //                 } elseif ($today < $eventDate->toDateString()) {
-    //                     $event->event_status = 2; // Upcoming
-    //                 } else {
-    //                     $event->event_status = 3; // Past
-    //                 }
-    //             } else {
-    //                 // Multi-day event
-    //                 $startDate = Carbon::parse(trim($dateRange[0]));
-    //                 $endDate = Carbon::parse(trim($dateRange[1]));
-
-    //                 if ($today >= $startDate->toDateString() && $today <= $endDate->toDateString()) {
-    //                     $event->event_status = 1; // Ongoing
-    //                 } elseif ($today < $startDate->toDateString()) {
-    //                     $event->event_status = 2; // Upcoming
-    //                 } else {
-    //                     $event->event_status = 3; // Past
-    //                 }
-    //             }
-
-    //             // Get the lowest ticket price
-    //             $event->lowest_ticket_price = $event->tickets->min('price') ?? 0;
-    //             $event->lowest_sale_price = $event->tickets->min('sale_price') ?? 0;
-    //         }
-
-    //         return response()->json(['status' => true, 'events' => $events->values()], 200);
-    //     }
-    // }
+   
 
 
     public function info($id)
@@ -1084,6 +666,19 @@ class EventController extends Controller
         ];
         if ($isExpired) {
             $response['event_expired'] = true;
+        }
+
+        // If event category is "Exclusive", include influencer data
+        if ($event->Category && strtolower($event->Category->title) === 'exclusive') {
+            $influencers = DB::table('influencers')
+                ->join('event_influencers', 'influencers.id', '=', 'event_influencers.influencer_id')
+                ->where('event_influencers.event_id', $event->id)
+                ->where('event_influencers.deleted_at', null)
+                ->where('influencers.deleted_at', null)
+                ->select('influencers.id', 'influencers.name')
+                ->get();
+            
+            $response['influencers'] = $influencers;
         }
 
         return response()->json($response, 200);
@@ -1740,10 +1335,10 @@ class EventController extends Controller
         // For example, you can log it or save it to the database
         return response()->json(['message' => 'Webhook received successfully'], 200);
     }
-
+  
     public function landingOrgId(Request $request, $organisation)
     {
-        //return $organisation;
+     //return $organisation;
         // 🔹 Get all user IDs under this organisation
         $userIds = User::where('organisation', $organisation)->pluck('id');
 
@@ -1753,7 +1348,7 @@ class EventController extends Controller
                 'message' => 'No users found for this organisation.'
             ], 200);
         }
-        $banner = Banner::whereIn('org_id', $userIds)
+  $banner = Banner::whereIn('org_id', $userIds)
             ->select('id', 'org_id', 'images', 'title', 'external_url')
             ->get();
         // 🔹 Get all events for all users in that organisation
@@ -1764,13 +1359,12 @@ class EventController extends Controller
             }
         ])
             ->whereIn('user_id', $userIds) // ✅ Use whereIn for multiple users
-            ->where('status', 1)
-            ->select('id', 'event_key', 'name', 'user_id', 'category', 'date_range', 'city', 'thumbnail');
+           ->where('status', 1) 
+            ->select('id', 'event_key', 'name', 'user_id', 'category', 'date_range','city','thumbnail');
 
-
-
-        $events = $query->orderBy('date_range', 'asc')->get();
-        // $events = $query->orderBy('created_at', 'desc')->get();
+       
+	$events = $query->orderBy('date_range', 'asc')->get();
+        //$events = $query->orderBy('created_at', 'desc')->get();
 
         if ($events->isEmpty()) {
             return response()->json([

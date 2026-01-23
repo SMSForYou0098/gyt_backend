@@ -20,7 +20,9 @@ class SmsService
         $sender_id = null;
 
         // Step 1: Get the SMS template
+        //Log::info('Fetching SMS Template', ['template_name' => $templateName]);
         $templateData = SmsTemplate::where('template_name', $templateName)->first();
+        //Log::info('SMS Template Data', ['template' => $templateData]);
         if (!$templateData) {
             return ['error' => 'Template not found'];
         }
@@ -31,7 +33,7 @@ class SmsService
         // Step 2: Replace placeholders
         $finalMessage = strtr($messages, $data->replacements ?? []);
 
-
+        //Log::info('Final SMS Message', ['message' => $finalMessage]);
 
         // Step 3: Get admin SMS config if required
         if ($config_status === "0") {

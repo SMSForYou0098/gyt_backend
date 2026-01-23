@@ -19,7 +19,7 @@ class WhatsappService
     
          $mediaurl =  $data->mediaurl ?? '';
          //$mediaurl =  $data->eventThumbnail ?? "https://cricket.getyourticket.in/uploads/thumbnail/688b2dfbc72ab_ff.jpg";
-         $data->buttonValue = [$data->shortLink, $data->insta_whts_url ?? 'helloinsta'];
+         $data->buttonValue = [$data->orderId, $data->insta_whts_url ?? 'helloinsta'];
         //  $data->buttonValue = [$data->shortLink, 'DMpaachCAVi/'];
         
         $admin = User::role('Admin', 'api')->with('whatsappConfig')->first();
@@ -35,9 +35,7 @@ class WhatsappService
 
         // Template values
         $value = $data->values ?? [];
-        //return $value;
-        Log::info('Sending WhatsApp Messageeeeeeeeeeeee', ['response' => $value]);
-        // API Call
+       
 
         $whatsappApi = "https://waba.smsforyou.biz/api/send-messages";
         $params = [
@@ -52,7 +50,7 @@ class WhatsappService
         ];
         //Log::info('Sending WhatsApp Message', ['response' => $params]);
         $response = Http::get($whatsappApi, $params);
-        // Log::info('Sending WhatsApp Message', ['response' => $response->body()]);
+         Log::info('Sending WhatsApp Message', ['response' => $response->body()]);
         //return $response;
         return $response->successful()
             ? ['message' => 'WhatsApp sent successfully', 'url' => $whatsappApi . '?' . http_build_query($params)]

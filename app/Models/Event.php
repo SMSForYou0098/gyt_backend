@@ -109,6 +109,12 @@ class Event extends Model
     {
         return $this->hasOne(CatLayout::class, 'category_id', 'event_key');
     }
+  	
+  	public function influencers()
+    {
+        return $this->belongsToMany(Influencer::class, 'event_influencers', 'event_id', 'influencer_id')
+                    ->withTimestamps();
+    }
 
     // public function seatConfig()
     // {

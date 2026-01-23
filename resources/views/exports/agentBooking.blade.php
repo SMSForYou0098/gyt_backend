@@ -8,6 +8,7 @@
             <th>Number</th>
             <th>Ticket</th>
             <th>Qty</th>
+            <th>Mode</th>
             <th>B Amt</th>
             <th>Disc</th>
             <th>Total</th>
@@ -27,6 +28,7 @@
     <td>{{ $booking['booking_number'] ?? '' }}</td>
     <td>{{ $booking['ticket_name'] ?? '' }}</td>
     <td>{{ $booking['quantity'] ?? 0 }}</td>
+    <td>{{ $booking['mode'] ?? 'N/A' }}</td>
     <td>{{ $booking['base_amount'] ?? 0 }}</td>
     <td>{{ $booking['discount'] ?? 0 }}</td>
     <td>{{ $booking['amount'] ?? 0 }}</td>
