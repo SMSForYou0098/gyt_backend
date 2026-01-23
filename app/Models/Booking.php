@@ -34,6 +34,9 @@ class Booking extends Model
         'easepayid',
         'inf_id',
         'approval_status',
+        'assigned_by',
+        'assigned_to',
+        'transferred_status',
     ];
   
   

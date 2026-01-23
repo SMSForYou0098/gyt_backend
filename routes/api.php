@@ -311,6 +311,11 @@ Route::middleware(['restrict.ip'])->group(function () {
         Route::get('user-form-number/{id}', [AgentController::class, 'userFormNumber']);
         Route::get('agent-restore-booking/{token}', [AgentController::class, 'restoreBooking']);
         Route::delete('agent-delete-booking/{token}', [AgentController::class, 'destroy']);
+        
+        //split
+         Route::post('check-split-user', [AgentController::class, 'checkSplitUser']);
+         Route::post('split-booking-transfer', [AgentController::class, 'splitBookingTransfer']);
+
 
         //sponsor booking
         Route::post('sponsor-book-ticket/{id}', [SponsorBookingController::class, 'store']);
