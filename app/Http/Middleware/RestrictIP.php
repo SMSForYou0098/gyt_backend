@@ -17,7 +17,7 @@ class RestrictIP
       'www.getyourticket.in',
       'mercury-t2.phonepe.com',
       '192.168.0.126',
-       '192.168.0.140',
+       '192.168.0.146',
       'www.cashfree.com',
       'api.cashfree.com',
       'razorpay.com',

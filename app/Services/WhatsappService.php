@@ -17,8 +17,8 @@ class WhatsappService
 
         $template = $data->whatsappTemplateData ?? '';
     
-         $mediaurl =  $data->mediaurl ?? '';
-         //$mediaurl =  $data->eventThumbnail ?? "https://cricket.getyourticket.in/uploads/thumbnail/688b2dfbc72ab_ff.jpg";
+        //  $mediaurl =  $data->mediaurl ?? '';
+         $mediaurl =  $data->eventThumbnail ?? "https://cricket.getyourticket.in/uploads/thumbnail/688b2dfbc72ab_ff.jpg";
          $data->buttonValue = [$data->orderId, $data->insta_whts_url ?? 'helloinsta'];
         //  $data->buttonValue = [$data->shortLink, 'DMpaachCAVi/'];
         

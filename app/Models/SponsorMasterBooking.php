@@ -10,6 +10,19 @@ use Illuminate\Database\Eloquent\SoftDeletes;
 class SponsorMasterBooking extends Model
 {
     use HasFactory,SoftDeletes;
+
+    protected $fillable = [
+        'order_id',
+        'user_id',
+        'sponsor_id',
+        'amount',
+        'payment_method',
+        'session_id',
+        'booking_id',  
+        'transferred_status',
+        'assigned_by',
+        'assigned_to',
+    ];
     
     protected $casts = [
         'booking_id' => 'array',

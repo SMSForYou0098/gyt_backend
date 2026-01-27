@@ -21,7 +21,7 @@ class AgentMaster extends Model
         'order_id',
         'amount',
         'discount',
-        'payment_method'
+        'payment_method','session_id','agent_id','transferred_status','assigned_by','assigned_to'
     ];
 
     public function bookings(): HasMany

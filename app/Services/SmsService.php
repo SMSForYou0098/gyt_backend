@@ -61,9 +61,9 @@ class SmsService
             'format'      => 'json',
             'template_id' => $templateID,
         ];
-        // Log::info('Sending sms Message', ['response' => $params]);
+        Log::info('Sending sms Message', ['response' => $params]);
         $response = Http::get($otpApi, $params);
-        // Log::info('Sending sms Message', ['response' => $response->body()]);
+        Log::info('Sending sms Message', ['response' => $response->body()]);
 
         return $response->successful()
             ? ['message' => 'SMS sent successfully', 'url' => $otpApi . '?' . http_build_query($params)]
