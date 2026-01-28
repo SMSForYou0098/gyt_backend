@@ -53,9 +53,8 @@ class AgentController extends Controller
             }
 
             // Get master bookings
-            $masterQuery = AgentMaster::
-            // $masterQuery = AgentMaster::withTrashed()
-                whereBetween('created_at', [$startDate, $endDate]);
+            $masterQuery = AgentMaster::withTrashed()
+                ->whereBetween('created_at', [$startDate, $endDate]);
 
             if ($loggedInUser->hasRole('Agent')) {
                 $masterQuery->where('agent_id', $loggedInUser->id);
@@ -83,9 +82,8 @@ class AgentController extends Controller
             })->unique()->values();
 
             // Pre-fetch all agent bookings for master bookings
-            $agentBookingsCollection = Agent::
-            // $agentBookingsCollection = Agent::withTrashed()
-                whereIn('id', $allBookingIds)
+            $agentBookingsCollection = Agent::withTrashed()
+                ->whereIn('id', $allBookingIds)
                 ->with(['ticket.event.user', 'user:id,name,number,email,photo,reporting_user,company_name,designation', 'agentUser:id,name', 'attendee:id,Seat_Name'])
                 ->get()->keyBy('id');
 
@@ -975,262 +973,442 @@ class AgentController extends Controller
 
 
 
-    public function splitBookingTransfer(
-        Request $request,
-        SmsService $smsService,
-        WhatsappService $whatsappService
-    ) {
-        $request->validate([
-            'order_id'  => 'required',
-            'is_master' => 'required|boolean',
-            'qty'       => 'required|integer|min:1',
-            'user_id'   => 'required|integer',
-            'hash_key'  => 'required|string',
-            'type'      => 'required|string',
-        ]);
+    // public function splitBookingTransfer(Request $request, SmsService $smsService, WhatsappService $whatsappService)
+    // {
+    //     $request->validate([
+    //         'order_id'   => 'required',
+    //         'is_master'  => 'required|boolean',
+    //         'qty'        => 'required|integer|min:1',
+    //         'user_id'    => 'required|integer',
+    //         'hash_key'   => 'required|string',
+    //         'type'       => 'required|string',
+    //     ]);
 
-        DB::beginTransaction();
+    //     DB::beginTransaction();
 
-        try {
+    //     try {
 
-            /* =====================
+    //         // Validate User
+    //         $user = User::find($request->user_id);
+    //         if (!$user) {
+    //             return response()->json(['status' => false, 'message' => 'User not found'], 404);
+    //         }
+
+    //         // Validate hash
+    //         $cacheKey   = 'user_hash_' . $user->id;
+    //         $cachedHash = Cache::get($cacheKey);
+
+    //         if (!$cachedHash || $cachedHash !== $request->hash_key) {
+    //             return response()->json(['status' => false, 'message' => 'Invalid or expired hash key'], 401);
+    //         }
+    //         $transferSummary = [];
+    //         // Master mapping
+    //         $masterMap = [
+    //             'AgentMasterBooking'   => AgentMaster::class,
+    //             'SponsorMasterBooking' => SponsorMasterBooking::class,
+    //         ];
+
+    //         // Single booking mapping
+    //         $singleBookingMap = [
+    //             'AgentMasterBooking'   => Agent::class,
+    //             'SponsorMasterBooking' => SponsorBooking::class,
+    //         ];
+
+
+    //         // MASTER BOOKING TRANSFER
+
+    //         if ($request->is_master == true) {
+
+    //             if (!isset($masterMap[$request->type])) {
+    //                 return response()->json(['status' => false, 'message' => 'Invalid master type'], 422);
+    //             }
+
+    //             $master = $masterMap[$request->type]::where('order_id', $request->order_id)->first();
+    //             if (!$master) {
+    //                 return response()->json(['status' => false, 'message' => 'Master booking not found'], 404);
+    //             }
+
+    //             $bookingIds = is_array($master->booking_id)
+    //                 ? $master->booking_id
+    //                 : json_decode($master->booking_id, true);
+
+    //             if (!is_array($bookingIds)) {
+    //                 return response()->json(['status' => false, 'message' => 'Invalid booking data'], 422);
+    //             }
+
+    //             if (count($bookingIds) < $request->qty) {
+    //                 return response()->json(['status' => false, 'message' => 'Not enough quantity to transfer'], 422);
+    //             }
+
+    //             $selectedBookingIds = array_slice($bookingIds, 0, $request->qty);
+
+    //             // ✅ Correct table selection
+    //             $bookingModel = $singleBookingMap[$request->type];
+
+    //             $bookings = $bookingModel::whereIn('id', $selectedBookingIds)
+    //                 ->where('transferred_status', 0)
+    //                 ->get();
+
+    //             if ($bookings->count() < $request->qty) {
+    //                 return response()->json(['status' => false, 'message' => 'Insufficient bookings available'], 422);
+    //             }
+
+    //             $getSession = $this->generateEncryptedSessionId();
+    //             $sessionId  = $getSession['original'];
+
+    //             $perTicketAmount = $master->amount / count($bookingIds);
+    //             $transferAmount = $perTicketAmount * $request->qty;
+
+    //             $first = true;
+
+    //             foreach ($bookings as $booking) {
+    //                 $booking->update([
+    //                     'token' => $this->generateHexadecimalCode(),
+    //                     'session_id' => $sessionId,
+    //                     'user_id' => $user->id,
+    //                     'name' => $user->name,
+    //                     'number' => $user->number,
+    //                     'email' => $user->email,
+    //                     'transferred_status' => 1,
+    //                     'assigned_by' => auth()->id(),
+    //                     'assigned_to' => $user->id,
+    //                     'amount' => $first ? $transferAmount : null,
+    //                     'base_amount' => $first ? $transferAmount : null,
+    //                 ]);
+    //                 $first = false;
+    //             }
+
+
+    //             // Remaining IDs
+    //             $remainingIds = array_values(array_diff($bookingIds, $selectedBookingIds));
+    //             $totalTickets = $request->total_quantity;
+    //             $totalAmount  = $request->amount;
+    //             $requiredTickets = $request->qty;
+
+    //             $amount = ($totalAmount / $totalTickets) * $requiredTickets;
+    //             $remainingAmount = $totalAmount - $amount;
+
+    //             // ✅ Create NEW master of SAME TYPE
+    //             $newMaster = $masterMap[$request->type]::create([
+    //                 'order_id' => $this->generateHexadecimalCode(),
+    //                 'user_id' => $user->id,
+    //                 'agent_id' => auth()->id(),
+    //                 'amount' => $amount,
+    //                 'payment_method' => $master->payment_method,
+    //                 'session_id' => $sessionId,
+    //                 'booking_id' => $selectedBookingIds,
+    //                 'transferred_status' => 1,
+    //                 'assigned_by' => auth()->id(),
+    //                 'assigned_to' => $user->id,
+    //             ]);
+
+    //             // Update old master
+    //             // $master->update(['booking_id' => $remainingIds, 'amount'  => $master->amount - $amount,]);
+
+
+    //             // $singleBookingId = $remainingIds[0];
+
+    //             // $singleBookingMap[$request->type]::where('id', $singleBookingId)
+    //             //     ->update(['amount' => $remainingAmount, 'base_amount' => $remainingAmount]);
+
+
+
+    //             $remainingCount = count($remainingIds);
+
+    //             // 🔹 CASE 1: 1 ticket baki → MASTER DELETE
+    //             if ($remainingCount === 1) {
+
+    //                 // Soft delete master
+    //                 $master->delete();
+
+    //                 // Last booking → ONLY single booking
+    //                 $singleBookingMap[$request->type]::where('id', $remainingIds[0])
+    //                     ->update([
+    //                         'amount' => $remainingAmount,
+    //                         'base_amount' => $remainingAmount,
+    //                         'master_id' => null, // jo column hoy to
+    //                     ]);
+    //             }
+    //             // 🔹 CASE 2: 1 karta vadhare baki → MASTER UPDATE
+    //             else {
+
+    //                 $master->update([
+    //                     'booking_id' => $remainingIds,
+    //                     'amount' => $remainingAmount,
+    //                 ]);
+
+    //                 // First remaining booking ne amount assign
+    //                 $singleBookingMap[$request->type]::where('id', $remainingIds[0])
+    //                     ->update([
+    //                         'amount' => $remainingAmount,
+    //                         'base_amount' => $remainingAmount,
+    //                     ]);
+    //             }
+
+    //             //  SMS / WHATSAPP (MASTER)
+
+    //             $sampleBooking = $bookings->first();
+    //             $sampleBooking->load('ticket.event');
+
+    //             $sender = auth()->user();
+
+
+    //             // TO → AUTH USER (TOTAL QTY)
+    //             $this->sendSmsWhatsapp(
+    //                 'to',
+    //                 $sender->name,
+    //                 $sender->number,
+    //                 $booking->name,
+    //                 $booking->number,
+    //                 $sampleBooking,
+    //                 $sampleBooking->ticket,
+    //                 $sampleBooking->ticket?->event,
+    //                 $request->qty,          // ✅ TOTAL QTY
+    //                 $request->order_id,
+    //                 $smsService,
+    //                 $whatsappService
+    //             );
+
+    //             // FROM → RECEIVER USER
+    //             $this->sendSmsWhatsapp(
+    //                 'from',
+    //                 $sender->name,
+    //                 $sender->number,
+    //                 $booking->name,
+    //                 $booking->number,
+    //                 $sampleBooking,
+    //                 $sampleBooking->ticket,
+    //                 $sampleBooking->ticket?->event,
+    //                 $request->qty,
+    //                 $request->order_id,
+    //                 $smsService,
+    //                 $whatsappService
+    //             );
+
+    //             $transferSummary = [
+    //                 'transfer_type' => 'master',
+    //                 'transferred_by' => [
+    //                     'id' => $sender->id,
+    //                     'name' => $sender->name,
+    //                     'number' => $sender->number,
+    //                 ],
+    //                 'transferred_to' => [
+    //                     'id' => $user->id,
+    //                     'name' => $user->name,
+    //                     'number' => $user->number,
+    //                 ],
+    //                 'total_tickets_transferred' => $request->qty,
+    //                 'event' => $sampleBooking->ticket?->event?->name,
+    //                 'new_master_order_id' => $newMaster->order_id,
+    //             ];
+    //         }
+
+
+    //         //SINGLE BOOKING TRANSFER
+    //         else {
+
+    //             if ($request->type === 'Agent') {
+
+    //                 $booking = Agent::where('token', $request->order_id)
+    //                     ->where('transferred_status', 0)
+    //                     ->first();
+    //             } elseif ($request->type === 'SponsorBooking') {
+
+    //                 $booking = SponsorBooking::where('token', $request->order_id)
+    //                     ->where('transferred_status', 0)
+    //                     ->first();
+    //             }
+
+    //             if (!$booking) {
+    //                 return response()->json(['status' => false, 'message' => 'Booking not found'], 404);
+    //             }
+
+    //             $getSession = $this->generateEncryptedSessionId();
+    //             $sessionId  = $getSession['original'];
+
+    //             $booking->update([
+    //                 'token' => $this->generateHexadecimalCode(),
+    //                 'session_id' => $sessionId,
+    //                 'user_id' => $user->id,
+    //                 'name' => $user->name,
+    //                 'number' => $user->number,
+    //                 'email' => $user->email,
+    //                 'transferred_status' => 1,
+    //                 'assigned_by' => auth()->id(),
+    //                 'assigned_to' => $user->id,
+    //             ]);
+
+    //             $booking->load('ticket.event');
+
+    //             // SMS / WhatsApp
+
+    //             $sender = auth()->user();
+    //             $this->sendSmsWhatsapp(
+    //                 'to',
+    //                 $sender->name,
+    //                 $sender->number,
+    //                 $booking->name,
+    //                 $booking->number,
+    //                 $booking,
+    //                 $booking->ticket,
+    //                 $booking->ticket?->event,
+    //                 1,
+    //                 $booking->token,
+    //                 $smsService,
+    //                 $whatsappService
+    //             );
+
+    //             $this->sendSmsWhatsapp(
+    //                 'from',
+    //                 $sender->name,
+    //                 $sender->number,
+    //                 $booking->name,
+    //                 $booking->number,
+    //                 $booking,
+    //                 $booking->ticket,
+    //                 $booking->ticket?->event,
+    //                 1,
+    //                 $booking->token,
+    //                 $smsService,
+    //                 $whatsappService,
+    //             );
+    //             $transferSummary = [
+    //                 'transfer_type' => 'single',
+    //                 'transferred_by' => [
+    //                     'id' => $sender->id,
+    //                     'name' => $sender->name,
+    //                     'number' => $sender->number,
+    //                 ],
+    //                 'transferred_to' => [
+    //                     'id' => $user->id,
+    //                     'name' => $user->name,
+    //                     'number' => $user->number,
+    //                 ],
+    //                 'total_tickets_transferred' => 1,
+    //                 'event' => $booking->ticket?->event?->name,
+    //                 'token' => $booking->token,
+    //             ];
+    //         }
+
+    //         DB::commit();
+
+    //         return response()->json([
+    //             'status' => true,
+    //             'message' => 'Booking transferred successfully',
+    //             'data' => $transferSummary
+    //         ]);
+    //     } catch (\Exception $e) {
+    //         DB::rollBack();
+
+    //         return response()->json([
+    //             'status' => false,
+    //             'message' => $e->getMessage()
+    //         ], 500);
+    //     }
+    // }
+
+public function splitBookingTransfer(
+    Request $request,
+    SmsService $smsService,
+    WhatsappService $whatsappService
+) {
+    $request->validate([
+        'order_id'  => 'required',
+        'is_master' => 'required|boolean',
+        'qty'       => 'required|integer|min:1',
+        'user_id'   => 'required|integer',
+        'hash_key'  => 'required|string',
+        'type'      => 'required|string',
+    ]);
+
+    DB::beginTransaction();
+
+    try {
+
+        /* =====================
            USER + HASH VALIDATION
         ====================== */
 
-            $user = User::find($request->user_id);
-            if (!$user) {
-                return response()->json(['status' => false, 'message' => 'User not found'], 404);
-            }
+        $user = User::find($request->user_id);
+        if (!$user) {
+            return response()->json(['status' => false, 'message' => 'User not found'], 404);
+        }
 
-            $cacheKey = 'user_hash_' . $user->id;
-            if (Cache::get($cacheKey) !== $request->hash_key) {
-                return response()->json(['status' => false, 'message' => 'Invalid or expired hash key'], 401);
-            }
+        $cacheKey = 'user_hash_' . $user->id;
+        if (Cache::get($cacheKey) !== $request->hash_key) {
+            return response()->json(['status' => false, 'message' => 'Invalid or expired hash key'], 401);
+        }
 
-            $transferSummary = [];
+        $transferSummary = [];
 
-            /* =====================
+        /* =====================
            MODEL MAPS
         ====================== */
 
-            $masterMap = [
-                'AgentMasterBooking'   => AgentMaster::class,
-                'SponsorMasterBooking' => SponsorMasterBooking::class,
-            ];
+        $masterMap = [
+            'AgentMasterBooking'   => AgentMaster::class,
+            'SponsorMasterBooking' => SponsorMasterBooking::class,
+        ];
 
-            $singleBookingMap = [
-                'AgentMasterBooking'   => Agent::class,
-                'SponsorMasterBooking' => SponsorBooking::class,
-            ];
+        $singleBookingMap = [
+            'AgentMasterBooking'   => Agent::class,
+            'SponsorMasterBooking' => SponsorBooking::class,
+        ];
 
-            /* =====================================================
+        /* =====================================================
            MASTER BOOKING TRANSFER
         ====================================================== */
 
-            if ($request->is_master) {
+        if ($request->is_master) {
 
-                if (!isset($masterMap[$request->type])) {
-                    return response()->json(['status' => false, 'message' => 'Invalid master type'], 422);
-                }
+            if (!isset($masterMap[$request->type])) {
+                return response()->json(['status' => false, 'message' => 'Invalid master type'], 422);
+            }
 
-                $master = $masterMap[$request->type]::where('order_id', $request->order_id)->first();
-                if (!$master) {
-                    return response()->json(['status' => false, 'message' => 'Master booking not found'], 404);
-                }
+            $master = $masterMap[$request->type]::where('order_id', $request->order_id)->first();
+            if (!$master) {
+                return response()->json(['status' => false, 'message' => 'Master booking not found'], 404);
+            }
 
-                $bookingIds = is_array($master->booking_id)
-                    ? $master->booking_id
-                    : json_decode($master->booking_id, true);
+            $bookingIds = is_array($master->booking_id)
+                ? $master->booking_id
+                : json_decode($master->booking_id, true);
 
-                if (!is_array($bookingIds) || empty($bookingIds)) {
-                    return response()->json(['status' => false, 'message' => 'Invalid booking data'], 422);
-                }
+            if (!is_array($bookingIds) || empty($bookingIds)) {
+                return response()->json(['status' => false, 'message' => 'Invalid booking data'], 422);
+            }
 
-                $totalTickets = count($bookingIds);
+            $totalTickets = count($bookingIds);
 
-                if ($request->qty > $totalTickets) {
-                    return response()->json(['status' => false, 'message' => 'Not enough tickets'], 422);
-                }
+            if ($request->qty > $totalTickets) {
+                return response()->json(['status' => false, 'message' => 'Not enough tickets'], 422);
+            }
 
-                $selectedIds  = array_slice($bookingIds, 0, $request->qty);
-                $remainingIds = array_values(array_diff($bookingIds, $selectedIds));
+            $selectedIds  = array_slice($bookingIds, 0, $request->qty);
+            $remainingIds = array_values(array_diff($bookingIds, $selectedIds));
 
-                $perTicketAmount = $master->amount / $totalTickets;
-                $transferAmount  = $perTicketAmount * $request->qty;
-                $remainingAmount = $master->amount - $transferAmount;
+            $perTicketAmount = $master->amount / $totalTickets;
+            $transferAmount  = $perTicketAmount * $request->qty;
+            $remainingAmount = $master->amount - $transferAmount;
 
-                $bookingModel = $singleBookingMap[$request->type];
+            $bookingModel = $singleBookingMap[$request->type];
 
-                $bookings = $bookingModel::whereIn('id', $selectedIds)
-                    ->where('transferred_status', 0)
-                    ->get();
+            $bookings = $bookingModel::whereIn('id', $selectedIds)
+                ->where('transferred_status', 0)
+                ->get();
 
-                if ($bookings->count() !== count($selectedIds)) {
-                    return response()->json(['status' => false, 'message' => 'Some tickets already transferred'], 422);
-                }
+            if ($bookings->count() !== count($selectedIds)) {
+                return response()->json(['status' => false, 'message' => 'Some tickets already transferred'], 422);
+            }
 
-                $sessionId = $this->generateEncryptedSessionId()['original'];
+            $sessionId = $this->generateEncryptedSessionId()['original'];
 
-                /* =====================
+            /* =====================
                UPDATE SELECTED TICKETS
             ====================== */
 
-                $first = true;
-                foreach ($bookings as $booking) {
-                    $booking->update([
-                        'token' => $this->generateHexadecimalCode(),
-                        'session_id' => $sessionId,
-                        'user_id' => $user->id,
-                        'name' => $user->name,
-                        'number' => $user->number,
-                        'email' => $user->email,
-                        'transferred_status' => 1,
-                        'assigned_by' => auth()->id(),
-                        'assigned_to' => $user->id,
-                        'amount' => $first ? $transferAmount : null,
-                        'base_amount' => $first ? $transferAmount : null,
-                    ]);
-                    $first = false;
-                }
-
-                /* =====================
-               CHECK IF MULTIPLE TICKETS
-            ====================== */
-
-                $isMultipleTickets = count($selectedIds) > 1;
-                $sampleBooking = $bookings->first();
-                $sampleBooking->load('ticket.event');
-
-                $sender = auth()->user();
-
-                if ($isMultipleTickets) {
-                    /* =====================
-                   CREATE NEW MASTER (Multiple Tickets)
-                ====================== */
-
-                    $newMaster = $masterMap[$request->type]::create([
-                        'order_id' => $this->generateHexadecimalCode(),
-                        'user_id' => $user->id,
-                        'agent_id' => auth()->id(),
-                        'amount' => $transferAmount,
-                        'payment_method' => $master->payment_method,
-                        'session_id' => $sessionId,
-                        'booking_id' => $selectedIds,
-                        'transferred_status' => 1,
-                        'assigned_by' => auth()->id(),
-                        'assigned_to' => $user->id,
-                    ]);
-
-                    $orderId = $newMaster->order_id;
-                } else {
-                    /* =====================
-                   SINGLE TICKET - NO MASTER (Only 1 Ticket)
-                ====================== */
-
-                    $orderId = $sampleBooking->token;
-                }
-
-                /* =====================
-               HANDLE OLD MASTER
-            ====================== */
-
-                $remainingCount = count($remainingIds);
-
-                // 🔴 0 or 1 remaining → MASTER DELETE
-                if ($remainingCount <= 1) {
-
-                    $master->delete();
-
-                    if ($remainingCount === 1) {
-                        $bookingModel::where('id', $remainingIds[0])->update([
-                            'amount' => $remainingAmount,
-                            'base_amount' => $remainingAmount,
-                            // 'master_id' => null,
-                        ]);
-                    }
-                }
-                // 🟢 More than 1 remaining → UPDATE MASTER
-                else {
-                    $master->update([
-                        'booking_id' => $remainingIds,
-                        'amount' => $remainingAmount,
-                    ]);
-
-                    $bookingModel::where('id', $remainingIds[0])->update([
-                        'amount' => $remainingAmount,
-                        'base_amount' => $remainingAmount,
-                    ]);
-                }
-
-                /* =====================
-               SMS / WHATSAPP
-            ====================== */
-
-                $this->sendSmsWhatsapp(
-                    'to',
-                    $sender->name,
-                    $sender->number,
-                    $user->name,
-                    $user->number,
-                    $sampleBooking,
-                    $sampleBooking->ticket,
-                    $sampleBooking->ticket?->event,
-                    $request->qty,
-                    $orderId,
-                    $smsService,
-                    $whatsappService
-                );
-
-                $this->sendSmsWhatsapp(
-                    'from',
-                    $sender->name,
-                    $sender->number,
-                    $user->name,
-                    $user->number,
-                    $sampleBooking,
-                    $sampleBooking->ticket,
-                    $sampleBooking->ticket?->event,
-                    $request->qty,
-                    $orderId,
-                    $smsService,
-                    $whatsappService
-                );
-
-                /* =====================
-               TRANSFER SUMMARY
-            ====================== */
-
-                if ($isMultipleTickets) {
-                    $transferSummary = [
-                        'transfer_type' => 'master',
-                        'new_master_order_id' => $orderId,
-                        'total_tickets_transferred' => $request->qty,
-                        'event' => $sampleBooking->ticket?->event?->name,
-                    ];
-                } else {
-                    $transferSummary = [
-                        'transfer_type' => 'single',
-                        'token' => $orderId,
-                        'total_tickets_transferred' => $request->qty,
-                        'event' => $sampleBooking->ticket?->event?->name,
-                    ];
-                }
-            }
-
-            /* =====================================================
-           SINGLE BOOKING TRANSFER
-        ====================================================== */ else {
-
-                $booking = $request->type === 'Agent'
-                    ? Agent::where('token', $request->order_id)->where('transferred_status', 0)->first()
-                    : SponsorBooking::where('token', $request->order_id)->where('transferred_status', 0)->first();
-
-                if (!$booking) {
-                    return response()->json(['status' => false, 'message' => 'Booking not found'], 404);
-                }
-
-                $sessionId = $this->generateEncryptedSessionId()['original'];
-
+            $first = true;
+            foreach ($bookings as $booking) {
                 $booking->update([
                     'token' => $this->generateHexadecimalCode(),
                     'session_id' => $sessionId,
@@ -1241,64 +1419,193 @@ class AgentController extends Controller
                     'transferred_status' => 1,
                     'assigned_by' => auth()->id(),
                     'assigned_to' => $user->id,
+                    'amount' => $first ? $transferAmount : null,
+                    'base_amount' => $first ? $transferAmount : null,
                 ]);
-
-                $booking->load('ticket.event');
-
-                $sender = auth()->user();
-
-                $this->sendSmsWhatsapp(
-                    'to',
-                    $sender->name,
-                    $sender->number,
-                    $user->name,
-                    $user->number,
-                    $booking,
-                    $booking->ticket,
-                    $booking->ticket?->event,
-                    1,
-                    $booking->token,
-                    $smsService,
-                    $whatsappService
-                );
-
-                $this->sendSmsWhatsapp(
-                    'from',
-                    $sender->name,
-                    $sender->number,
-                    $user->name,
-                    $user->number,
-                    $booking,
-                    $booking->ticket,
-                    $booking->ticket?->event,
-                    1,
-                    $booking->token,
-                    $smsService,
-                    $whatsappService
-                );
-
-                $transferSummary = [
-                    'transfer_type' => 'single',
-                    'token' => $booking->token,
-                    'event' => $booking->ticket?->event?->name,
-                ];
+                $first = false;
             }
 
-            DB::commit();
+            /* =====================
+               CREATE NEW MASTER
+            ====================== */
 
-            return response()->json([
-                'status' => true,
-                'message' => 'Booking transferred successfully',
-                'data' => $transferSummary
+            $newMaster = $masterMap[$request->type]::create([
+                'order_id' => $this->generateHexadecimalCode(),
+                'user_id' => $user->id,
+                'agent_id' => auth()->id(),
+                'amount' => $transferAmount,
+                'payment_method' => $master->payment_method,
+                'session_id' => $sessionId,
+                'booking_id' => $selectedIds,
+                'transferred_status' => 1,
+                'assigned_by' => auth()->id(),
+                'assigned_to' => $user->id,
             ]);
-        } catch (\Exception $e) {
-            DB::rollBack();
-            return response()->json([
-                'status' => false,
-                'message' => $e->getMessage()
-            ], 500);
+
+            /* =====================
+               HANDLE OLD MASTER
+            ====================== */
+
+            $remainingCount = count($remainingIds);
+
+            // 🔴 0 or 1 remaining → MASTER DELETE
+            if ($remainingCount <= 1) {
+
+                $master->delete();
+
+                if ($remainingCount === 1) {
+                    $bookingModel::where('id', $remainingIds[0])->update([
+                        'amount' => $remainingAmount,
+                        'base_amount' => $remainingAmount,
+                        // 'master_id' => null,
+                    ]);
+                }
+            }
+            // 🟢 More than 1 remaining → UPDATE MASTER
+            else {
+                $master->update([
+                    'booking_id' => $remainingIds,
+                    'amount' => $remainingAmount,
+                ]);
+
+                $bookingModel::where('id', $remainingIds[0])->update([
+                    'amount' => $remainingAmount,
+                    'base_amount' => $remainingAmount,
+                ]);
+            }
+
+            /* =====================
+               SMS / WHATSAPP
+            ====================== */
+
+            $sampleBooking = $bookings->first();
+            $sampleBooking->load('ticket.event');
+
+            $sender = auth()->user();
+
+            $this->sendSmsWhatsapp(
+                'to',
+                $sender->name,
+                $sender->number,
+                $user->name,
+                $user->number,
+                $sampleBooking,
+                $sampleBooking->ticket,
+                $sampleBooking->ticket?->event,
+                $request->qty,
+                $newMaster->order_id,
+                $smsService,
+                $whatsappService
+            );
+
+            $this->sendSmsWhatsapp(
+                'from',
+                $sender->name,
+                $sender->number,
+                $user->name,
+                $user->number,
+                $sampleBooking,
+                $sampleBooking->ticket,
+                $sampleBooking->ticket?->event,
+                $request->qty,
+                $newMaster->order_id,
+                $smsService,
+                $whatsappService
+            );
+
+            $transferSummary = [
+                'transfer_type' => 'master',
+                'new_master_order_id' => $newMaster->order_id,
+                'total_tickets_transferred' => $request->qty,
+                'event' => $sampleBooking->ticket?->event?->name,
+            ];
         }
+
+        /* =====================================================
+           SINGLE BOOKING TRANSFER
+        ====================================================== */
+
+        else {
+
+            $booking = $request->type === 'Agent'
+                ? Agent::where('token', $request->order_id)->where('transferred_status', 0)->first()
+                : SponsorBooking::where('token', $request->order_id)->where('transferred_status', 0)->first();
+
+            if (!$booking) {
+                return response()->json(['status' => false, 'message' => 'Booking not found'], 404);
+            }
+
+            $sessionId = $this->generateEncryptedSessionId()['original'];
+
+            $booking->update([
+                'token' => $this->generateHexadecimalCode(),
+                'session_id' => $sessionId,
+                'user_id' => $user->id,
+                'name' => $user->name,
+                'number' => $user->number,
+                'email' => $user->email,
+                'transferred_status' => 1,
+                'assigned_by' => auth()->id(),
+                'assigned_to' => $user->id,
+            ]);
+
+            $booking->load('ticket.event');
+
+            $sender = auth()->user();
+
+            $this->sendSmsWhatsapp(
+                'to',
+                $sender->name,
+                $sender->number,
+                $user->name,
+                $user->number,
+                $booking,
+                $booking->ticket,
+                $booking->ticket?->event,
+                1,
+                $booking->token,
+                $smsService,
+                $whatsappService
+            );
+
+            $this->sendSmsWhatsapp(
+                'from',
+                $sender->name,
+                $sender->number,
+                $user->name,
+                $user->number,
+                $booking,
+                $booking->ticket,
+                $booking->ticket?->event,
+                1,
+                $booking->token,
+                $smsService,
+                $whatsappService
+            );
+
+            $transferSummary = [
+                'transfer_type' => 'single',
+                'token' => $booking->token,
+                'event' => $booking->ticket?->event?->name,
+            ];
+        }
+
+        DB::commit();
+
+        return response()->json([
+            'status' => true,
+            'message' => 'Booking transferred successfully',
+            'data' => $transferSummary
+        ]);
+
+    } catch (\Exception $e) {
+        DB::rollBack();
+        return response()->json([
+            'status' => false,
+            'message' => $e->getMessage()
+        ], 500);
     }
+}
 
 
 

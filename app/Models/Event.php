@@ -64,6 +64,7 @@ class Event extends Model
         'card_url',
         'whts_note',
         'insta_whts_url',
+        'transfer_ticket'
         // 'access_area',
         // 'modify_as',
         // 'pixel_code',

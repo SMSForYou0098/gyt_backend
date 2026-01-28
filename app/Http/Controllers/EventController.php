@@ -602,6 +602,7 @@ class EventController extends Controller
             $event->whatsapp_number = $request->whatsapp_number;
             $event->whts_note = $request->whts_note;
             $event->insta_whts_url = $request->insta_whts_url;
+            $event->transfer_ticket = $request->transfer_ticket;
             // $event->access_area = $request->access_area;
             // $event->modify_as = $request->modify_as;
             // $event->pixel_code = $request->pixel_code;
@@ -745,6 +746,7 @@ class EventController extends Controller
                 'modify_as',
                 'whts_note',
                 'insta_whts_url',
+                'transfer_ticket'
                 // 'pixel_code',
                 // 'analytics_code',
 
