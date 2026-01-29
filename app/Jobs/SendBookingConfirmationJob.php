@@ -62,12 +62,14 @@ class SendBookingConfirmationJob implements ShouldQueue
             // Calculate quantity: For master booking, use the count of inner bookings, otherwise use 1
             $quantity = $this->isMasterBooking ? $this->masterBookingInnerCount : 1;
             $shortLink = $this->isMasterBooking ? $this->orderId : $booking->token;
-            $shortLinksms = "getyourticket.in/t/{$shortLink}";
+            $shortLinksms = $shortLink;
+            // $shortLinksms = "getyourticket.in/t/{$shortLink}";
             // Prepare notification data
             $data = (object) [
+                'orderId' => $this->orderId,
                 'name' => $booking->name,
                 'number' => $booking->number,
-                'shortLink' => $shortLinksms,
+                'shortLink' => $$shortLink,
                 'templateName' => 'Online Booking Template',
                 'whatsappTemplateData' => $whatsappTemplateName,
                 'mediaurl' => $mediaurl,
@@ -84,7 +86,7 @@ class SendBookingConfirmationJob implements ShouldQueue
                 'replacements' => [
                     ':C_Name' => $booking->name,
                     ':T_QTY' => $quantity,
-                    ':S_Link'=> $shortLinksms,
+                    ':S_Link'=> $shortLink,
                     ':Ticket_Name' => $booking->ticket->name,
                     ':Event_Name' => $booking->ticket->event->name,
                     ':Event_DateTime' => $eventDateTime,

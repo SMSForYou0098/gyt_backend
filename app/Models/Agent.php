@@ -8,7 +8,7 @@ use Illuminate\Database\Eloquent\SoftDeletes;
 
 class Agent extends Model
 {
-    use HasFactory,SoftDeletes;
+    use HasFactory, SoftDeletes;
     protected $table = 'agents';
     protected $guarded = ['id'];
 
@@ -30,6 +30,16 @@ class Agent extends Model
     }
     public function attendee()
     {
-        return $this->belongsTo(Attndy::class ,'attendee_id');
+        return $this->belongsTo(Attndy::class, 'attendee_id');
+    }
+
+    public function assignedByUser()
+    {
+        return $this->belongsTo(User::class, 'assigned_by');
+    }
+
+    public function assignedToUser()
+    {
+        return $this->belongsTo(User::class, 'assigned_to');
     }
 }

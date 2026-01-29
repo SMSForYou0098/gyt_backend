@@ -50,9 +50,9 @@ class SponsorBookingController extends Controller
 
         // 🔹 Admin → બધા bookings
         if ($isAdmin) {
-            $Masterbookings = SponsorMasterBooking::
-            // $Masterbookings = SponsorMasterBooking::withTrashed()
-                whereBetween('created_at', [$startDate, $endDate])
+            // $Masterbookings = SponsorMasterBooking::
+            $Masterbookings = SponsorMasterBooking::withTrashed()
+                ->whereBetween('created_at', [$startDate, $endDate])
                 ->latest()
                 ->get();
 
@@ -62,9 +62,9 @@ class SponsorBookingController extends Controller
 
                 if (is_array($bookingIds)) {
                     $allBookingIds = array_merge($allBookingIds, $bookingIds);
-                    $masterBooking->bookings = SponsorBooking::
-                    // $masterBooking->bookings = SponsorBooking::withTrashed()
-                        whereIn('id', $bookingIds)
+                    // $masterBooking->bookings = SponsorBooking::
+                    $masterBooking->bookings = SponsorBooking::withTrashed()
+                        ->whereIn('id', $bookingIds)
                         ->whereBetween('created_at', [$startDate, $endDate])
                         ->with(['ticket.event.user', 
                         'user:id,name,number,email,photo,reporting_user,company_name,designation',

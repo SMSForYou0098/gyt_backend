@@ -220,6 +220,7 @@ class BookingController extends Controller
 
         //agent
         $AgentMasterbookings = AgentMaster::where('user_id', $userId)
+            ->with(['assignedByUser', 'assignedToUser'])
             ->latest()
             ->get();
 
@@ -230,7 +231,13 @@ class BookingController extends Controller
                 $allAgentBookingIds = array_merge($allAgentBookingIds, $bookingIds);
                 $masterBooking->bookings = Agent::whereIn('id', $bookingIds)
                     ->whereNull('deleted_at')
-                    ->with(['ticket.event.user', 'ticket.event.Category', 'user'])
+                    ->with([
+                        'ticket.event.user',
+                        'ticket.event.Category',
+                        'user',
+                        'assignedByUser',
+                        'assignedToUser'
+                    ])
                     ->latest()
                     ->get();
             } else {
@@ -243,12 +250,24 @@ class BookingController extends Controller
         });
 
         $normalAgentBookings = Agent::where('user_id', $userId)
-            ->with(['ticket.event.user', 'ticket.event.Category', 'user'])
+            ->with([
+                'ticket.event.user',
+                'ticket.event.Category',
+                'user',
+                'assignedByUser',
+                'assignedToUser'
+            ])
             ->latest()
             ->get()
             ->map(function ($booking) {
                 $booking->is_deleted = $booking->trashed();
                 $booking->type = 'Agent';
+                // ONLY NAMES
+                $booking->assigned_by_name = $booking->assignedByUser->name ?? null;
+                $booking->assigned_to_name = $booking->assignedToUser->name ?? null;
+
+                // optional: relation hataavi do
+                unset($booking->assignedByUser, $booking->assignedToUser);
                 return $booking;
             });
 
@@ -982,12 +1001,12 @@ class BookingController extends Controller
 
     public function restoreBooking($id, $token)
     {
-     if (!auth()->check() || !auth()->user()->hasRole('Admin')) {
-        return response()->json([
-            'status' => false,
-            'message' => 'Unauthorized access. Only admin can restore booking.'
-        ], 403);
-    }
+        if (!auth()->check() || !auth()->user()->hasRole('Admin')) {
+            return response()->json([
+                'status' => false,
+                'message' => 'Unauthorized access. Only admin can restore booking.'
+            ], 403);
+        }
         $Masterbookings = MasterBooking::withTrashed()
             ->where('id', $id)
             ->where('order_id', $token)
@@ -1033,17 +1052,17 @@ class BookingController extends Controller
         }
     }
 
-   
-  
-     public function export(Request $request)
+
+
+    public function export(Request $request)
     {
         $Attendee = $request->input('user_id');
         $eventName = $request->input('ticket_id');
         $status = $request->input('status');
         $dates = $request->input('date') ? explode(',', $request->input('date')) : [Carbon::today()->format('Y-m-d')];
 
-       // $query = Booking::query();
-      $query = Booking::withTrashed();
+        // $query = Booking::query();
+        $query = Booking::withTrashed();
 
 
         if ($request->has('ticket_id')) {
@@ -1088,18 +1107,18 @@ class BookingController extends Controller
                 'status'         => $first->status,
                 'disabled'       => $first->disabled,
                 'created_at'     => $first->created_at,
-              'gateway'     => $first->gateway ?? 'N/A',
+                'gateway'     => $first->gateway ?? 'N/A',
                 'payment_id'     => $first->payment_id ?? 'N/A',
-              'deleted_at'     => $first->deleted_at,
-              'is_refunded'     => $first->is_refunded,
+                'deleted_at'     => $first->deleted_at,
+                'is_refunded'     => $first->is_refunded,
                 'refunded_at'     => $first->refunded_at,
-             
+
             ];
         })->values();
 
         return Excel::download(new BookingExport($groupedBookings), 'Booking_export.xlsx');
     }
-  
+
     public function imagesRetrive(Request $request)
     {
         $fullImagePath = $request->input('path');
@@ -1465,7 +1484,7 @@ class BookingController extends Controller
             'agent_bookings' => $agentBookings,
         ], 200);
     }
-  
+
     public function refunded(Request $request, $id, $token, WhatsappService $whatsappService)
     {
         $isMaster = filter_var(

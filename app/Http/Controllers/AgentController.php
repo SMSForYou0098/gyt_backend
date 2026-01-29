@@ -7,6 +7,7 @@ use App\Models\Agent;
 use App\Models\AgentMaster;
 use App\Models\Balance;
 use App\Models\Booking;
+use App\Models\DeletedMaster;
 use App\Models\Event;
 use App\Models\MasterBooking;
 use App\Models\SponsorBooking;
@@ -53,9 +54,9 @@ class AgentController extends Controller
             }
 
             // Get master bookings
-            $masterQuery = AgentMaster::
-            // $masterQuery = AgentMaster::withTrashed()
-                whereBetween('created_at', [$startDate, $endDate]);
+            // $masterQuery = AgentMaster::
+            $masterQuery = AgentMaster::withTrashed()
+                ->whereBetween('created_at', [$startDate, $endDate]);
 
             if ($loggedInUser->hasRole('Agent')) {
                 $masterQuery->where('agent_id', $loggedInUser->id);
@@ -83,9 +84,9 @@ class AgentController extends Controller
             })->unique()->values();
 
             // Pre-fetch all agent bookings for master bookings
-            $agentBookingsCollection = Agent::
-            // $agentBookingsCollection = Agent::withTrashed()
-                whereIn('id', $allBookingIds)
+            // $agentBookingsCollection = Agent::
+            $agentBookingsCollection = Agent::withTrashed()
+                ->whereIn('id', $allBookingIds)
                 ->with(['ticket.event.user', 'user:id,name,number,email,photo,reporting_user,company_name,designation', 'agentUser:id,name', 'attendee:id,Seat_Name'])
                 ->get()->keyBy('id');
 
@@ -1139,7 +1140,8 @@ class AgentController extends Controller
                 // 🔴 0 or 1 remaining → MASTER DELETE
                 if ($remainingCount <= 1) {
 
-                    $master->delete();
+                    // $master->delete();
+                    $this->hardDeleteMasterWithBackup($master);
 
                     if ($remainingCount === 1) {
                         $bookingModel::where('id', $remainingIds[0])->update([
@@ -1301,6 +1303,19 @@ class AgentController extends Controller
     }
 
 
+    private function hardDeleteMasterWithBackup($master)
+    {
+        // Save full record in deleted_masters table
+        DeletedMaster::create([
+            'original_table' => get_class($master),
+            'original_id'    => $master->id,
+            'data'           => $master->toArray(),
+            'deleted_by'     => auth()->id(),
+        ]);
+
+        // HARD DELETE (skip deleted_at)
+        $master->forceDelete();
+    }
 
     private function sendSmsWhatsapp(
         string $direction, // to | from
